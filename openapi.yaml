@@ -1,0 +1,213 @@
+openapi: 3.1.0
+
+info:
+  title: ASE Project - Monster Tamer
+  version: 1.0.0
+  description: >-
+    API per la gestione delle operazioni, la creazione di account e il login.
+
+servers:
+  - url: http://localhost:5005
+
+paths:
+  /:
+    get:
+      summary: Check service status
+      description: >-
+        Returns the status of the microservice and available endpoints.
+      operationId: getServiceStatus
+      responses:
+        '200':
+          description: Service is online
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                  endpoints:
+                    type: object
+                    additionalProperties:
+                      type: string
+              example:
+                message: Microservizio Login attivo!
+                status: online
+                endpoints:
+                  create_account: POST /create_account
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: server_error
+                message: An unexpected error occurred
+
+  /create_account:
+    post:
+      summary: Create a new user account
+      description: >-
+        Creates a new user account with a username and password.
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arguments:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 2
+                  maxItems: 2
+                  description: >-
+                    An array containing the username and password.
+            example:
+              arguments: ["user123", "password123"]
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
+              example:
+                message: Account created successfully
+                username: user123
+        '400':
+          description: Invalid input or request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                invalidInput:
+                  value:
+                    error: invalid_input
+                    message: Username and password must be strings
+                invalidRequest:
+                  value:
+                    error: invalid_request
+                    message: Request body must be a JSON object
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: server_error
+                message: An unexpected error occurred
+
+  /login:
+    post:
+      summary: Login to an existing account
+      description: >-
+        Authenticates a user with a username and password.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arguments:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 2
+                  maxItems: 2
+                  description: >-
+                    An array containing the username and password.
+            example:
+              arguments: ["test_user", "test_password"]
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
+              example:
+                message: Login successful
+                username: test_user
+        '400':
+          description: Invalid input or request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                invalidInput:
+                  value:
+                    error: invalid_input
+                    message: Username and password must be strings
+                invalidRequest:
+                  value:
+                    error: invalid_request
+                    message: Request body must be a JSON object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: unauthorized
+                message: Invalid username or password
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: server_error
+                message: An unexpected error occurred

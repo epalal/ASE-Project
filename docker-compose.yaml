@@ -1,0 +1,25 @@
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "5005:5005"
+    depends_on:
+      - calc
+      - string
+      - history
+  calc:
+    build: ./calc
+    depends_on:
+      - history
+  string:
+    build: ./string
+    depends_on:
+      - history
+  history:
+    build: ./history
+    volumes:
+      - history-data: /app/data
+volume:
+  history-data:
+
+  # DA RIVEDERE OVVIAMENTE

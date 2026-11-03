@@ -161,112 +161,130 @@ def home():
     </html>
     ''', 200
 
-@app.route('/create_account', methods=['POST'])
-def create_account():
+@app.post('/player_service')
+def player_service():
     try:
         body = require_json_body()
+        operation_type = body.get("operation_type")
+        if operation_type not in ["create_account", "login"]:
+            return error("invalid_operation", "Invalid operation type")
+
         arguments = require_arguments(body, 2)
         username, password = arguments
 
         if not isinstance(username, str) or not isinstance(password, str):
             return error("invalid_input", "Username and password must be strings")
 
-        if username in users_db:
-            return error("user_exists", "Username already exists", status=409)
+        if operation_type == "create_account":
+            if username in users_db:
+                return error("user_exists", "Username already exists", status=409)
 
-        # Inizializza i dati dell'utente
-        users_db[username] = {
-            "password": password,
-            "progress": {
-                "level": 1,
-                "experience": 0
-            },
-            "characters": [
-                {"name": "FireDragon", "type": "fire", "level": 1},
-                {"name": "WaterPhoenix", "type": "water", "level": 1},
-                {"name": "EarthGolem", "type": "earth", "level": 1}
-            ]
-        }
+            # Inizializza i dati dell'utente
+            users_db[username] = {
+                "password": password,
+                "progress": {
+                    "level": 1,
+                    "experience": 0
+                },
+                "characters": [
+                    {"name": "FireDragon", "type": "fire", "level": 1},
+                    {"name": "WaterPhoenix", "type": "water", "level": 1},
+                    {"name": "EarthGolem", "type": "earth", "level": 1}
+                ]
+            }
 
-        return jsonify(message="Account created successfully", username=username), 201
+            return jsonify(message="Account created successfully", username=username), 201
 
-    except ValueError as e:
-        return error("invalid_request", str(e))
-    except Exception as e:
-       return error("server_error", "An unexpected error occurred")
+        elif operation_type == "login":
+            # Controlla se l'utente esiste e la password corrisponde
+            if username not in users_db or users_db[username]["password"] != password:
+                return error("unauthorized", "Invalid username or password", status=401)
 
-@app.route('/login', methods=['POST'])
-def login():
-    try:
-        body = require_json_body()
-        arguments = require_arguments(body, 2)
-        username, password = arguments
-
-        if not isinstance(username, str) or not isinstance(password, str):
-            return error("invalid_input", "Username and password must be strings")
-
-        # Controlla se l'utente esiste e la password corrisponde
-        if username not in users_db or users_db[username]["password"] != password:
-            return error("unauthorized", "Invalid username or password", status=401)
-
-        return jsonify(message="Login successful", username=username), 200
+            return jsonify(message="Login successful", username=username), 200
 
     except ValueError as e:
         return error("invalid_request", str(e))
     except Exception as e:
         return error("server_error", "An unexpected error occurred")
 
-@app.route('/game', methods=['GET'])
-def game():
-    try:
-        # Verifica se l'utente è autenticato
-        username = request.args.get('username')
-        if not username or username not in users_db:
-            return error("unauthorized", "Invalid or missing username", status=401)
-
-        user_data = users_db[username]
-        return jsonify(
-            message="Welcome to the game!",
-            progress=user_data["progress"],
-            characters=user_data["characters"]
-        ), 200
-
-    except Exception as e:
-        return error("server_error", "An unexpected error occurred")
-    
-@app.route('/game/progress', methods=['POST'])
-def update_progress():
+@app.post('/player_service')
+def player_service():
     try:
         body = require_json_body()
-        username = body.get("username")
-        if not username or username not in users_db:
-            return error("unauthorized", "Invalid or missing username", status=401)
+        operation_type = body.get("operation_type")
+        if operation_type not in ["create_account", "login", "enter_game", "game_progress", "characters"]:
+            return error("invalid_operation", "Invalid operation type")
 
-        progress = body.get("progress")
-        if not isinstance(progress, dict):
-            return error("invalid_input", "Progress must be a JSON object")
+        arguments = require_arguments(body, 2 if operation_type in ["create_account", "login"] else 1)
+        username = arguments[0]
 
-        users_db[username]["progress"].update(progress)
-        return jsonify(message="Progress updated successfully"), 200
+        if operation_type in ["create_account", "login"]:
+            password = arguments[1]
+            if not isinstance(username, str) or not isinstance(password, str):
+                return error("invalid_input", "Username and password must be strings")
 
-    except Exception as e:
-        return error("server_error", "An unexpected error occurred")
-  
-@app.route('/game/characters', methods=['POST'])
-def add_character():
-    try:
-        body = require_json_body()
-        username = body.get("username")
-        if not username or username not in users_db:
-            return error("unauthorized", "Invalid or missing username", status=401)
+            if operation_type == "create_account":
+                if username in users_db:
+                    return error("user_exists", "Username already exists", status=409)
 
-        character = body.get("character")
-        if not isinstance(character, dict) or "name" not in character or "type" not in character:
-            return error("invalid_input", "Character must be a JSON object with 'name' and 'type'")
+                # Inizializza i dati dell'utente
+                users_db[username] = {
+                    "password": password,
+                    "progress": {
+                        "level": 1,
+                        "experience": 0
+                    },
+                    "characters": [
+                        {"name": "FireDragon", "type": "fire", "level": 1},
+                        {"name": "WaterPhoenix", "type": "water", "level": 1},
+                        {"name": "EarthGolem", "type": "earth", "level": 1}
+                    ]
+                }
 
-        users_db[username]["characters"].append(character)
-        return jsonify(message="Character added successfully"), 200
+                return jsonify(message="Account created successfully", username=username), 201
 
+            elif operation_type == "login":
+                # Controlla se l'utente esiste e la password corrisponde
+                if username not in users_db or users_db[username]["password"] != password:
+                    return error("unauthorized", "Invalid username or password", status=401)
+
+                return jsonify(message="Login successful", username=username), 200
+
+        elif operation_type == "enter_game":
+            if username not in users_db:
+                return error("unauthorized", "Invalid or missing username", status=401)
+
+            user_data = users_db[username]
+            return jsonify(
+                message="Welcome to the game!",
+                progress=user_data["progress"],
+                characters=user_data["characters"]
+            ), 200
+
+        elif operation_type == "game_progress":
+            progress = body.get("progress")
+            if not isinstance(progress, dict):
+                return error("invalid_input", "Progress must be a JSON object")
+
+            if username not in users_db:
+                return error("unauthorized", "Invalid or missing username", status=401)
+
+            users_db[username]["progress"].update(progress)
+            return jsonify(message="Progress updated successfully"), 200
+
+        elif operation_type == "characters":
+            character = body.get("character")
+            if not isinstance(character, dict) or "name" not in character or "type" not in character:
+                return error("invalid_input", "Character must be a JSON object with 'name' and 'type'")
+
+            if username not in users_db:
+                return error("unauthorized", "Invalid or missing username", status=401)
+
+            users_db[username]["characters"].append(character)
+            return jsonify(message="Character added successfully"), 200
+
+    except ValueError as e:
+        return error("invalid_request", str(e))
     except Exception as e:
         return error("server_error", "An unexpected error occurred")
 

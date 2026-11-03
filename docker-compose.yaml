@@ -1,25 +1,50 @@
 services:
   gateway:
     build: ./gateway
+    container_name: api_gateway
     ports:
-      - "5005:5005"
+      - "127.0.0.1:5005:5005"
+    environment:
+      AUTH_URL: http://auth:5001
+      GAME_URL: http://game:5002
     depends_on:
-      - calc
-      - string
-      - history
-  calc:
-    build: ./calc
-    depends_on:
-      - history
-  string:
-    build: ./string
-    depends_on:
-      - history
-  history:
-    build: ./history
-    volumes:
-      - history-data: /app/data
-volume:
-  history-data:
+      auth:
+        condition: service_healthy
+      game:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5005/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
-  # DA RIVEDERE OVVIAMENTE
+  auth:
+    build: ./auth_service
+    container_name: auth_service
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  game:
+    build: ./game_service
+    container_name: game_service
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5002/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  shared-data:

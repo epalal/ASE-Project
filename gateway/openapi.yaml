@@ -1,0 +1,183 @@
+openapi: 3.1.0
+info:
+  title: ASE Operations API
+  version: 1.0.0
+  description: Public Lab 4 operations contract, preserved by the API Gateway. The gateway forwards
+    operations to calc/string and reads history. Downstream failures are reported as 502 or 504.
+servers:
+- url: http://localhost:5005
+paths:
+  /operations:
+    post:
+      summary: Execute an operation
+      description: Executes one supported operation. Only successful operations replace the value
+        returned by GET /operations/last.
+      operationId: executeOperation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationRequest'
+            examples:
+              division:
+                value:
+                  type: div
+                  arguments:
+                  - 10
+                  - 2
+              concatenation:
+                value:
+                  type: concat
+                  arguments:
+                  - hello
+                  - world
+      responses:
+        '200':
+          description: Operation executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResult'
+              examples:
+                division:
+                  value:
+                    operation: div
+                    arguments:
+                    - 10
+                    - 2
+                    result: 5
+        '400':
+          description: Invalid request, invalid arguments, or unsupported operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                divisionByZero:
+                  value:
+                    error: division_by_zero
+                    message: The divisor cannot be zero
+        '502':
+          description: Internal service failure or history notification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: Timeout in a dependent service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /operations/last:
+    get:
+      summary: Retrieve the last successful operation
+      operationId: getLastOperation
+      responses:
+        '200':
+          description: Last successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResult'
+        '404':
+          description: No successful operation has been executed yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: no_previous_operation
+                message: No successful operation has been executed yet
+        '502':
+          description: History service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: History service timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /health:
+    get:
+      summary: Gateway liveness check
+      operationId: gatewayHealth
+      responses:
+        '200':
+          description: Gateway process is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ok
+              example:
+                status: ok
+components:
+  schemas:
+    OperationRequest:
+      type: object
+      required:
+      - type
+      - arguments
+      properties:
+        type:
+          type: string
+          enum:
+          - add
+          - div
+          - upper
+          - concat
+          description: Operation to execute.
+        arguments:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            oneOf:
+            - type: number
+            - type: string
+          description: add and div require two numbers; upper requires one string; concat requires
+            two strings.
+    OperationResult:
+      type: object
+      additionalProperties: false
+      required:
+      - operation
+      - arguments
+      - result
+      properties:
+        operation:
+          type: string
+          enum:
+          - add
+          - div
+          - upper
+          - concat
+        arguments:
+          type: array
+          items:
+            oneOf:
+            - type: number
+            - type: string
+        result:
+          oneOf:
+          - type: number
+          - type: string
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+      - error
+      - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string

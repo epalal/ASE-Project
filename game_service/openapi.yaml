@@ -1,0 +1,188 @@
+openapi: 3.1.0
+
+info:
+  title: ASE Project - Game Service
+  version: 1.0.0
+  description: >-
+    API per la gestione delle operazioni di gioco, inclusi l'accesso al gioco,
+    l'aggiornamento dei progressi e la gestione dei personaggi.
+
+servers:
+  - url: http://localhost:5002
+
+paths:
+  /game_service:
+    post:
+      summary: Perform game-related operations
+      description: >-
+        This endpoint handles multiple operations related to the game, such as
+        entering the game, updating progress, and managing characters.
+      operationId: gameService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operation_type:
+                  type: string
+                  enum:
+                    - enter_game
+                    - game_progress
+                    - characters
+                  description: >-
+                    The type of operation to perform. Supported operations are:
+                    - `enter_game`: Enter the game and retrieve user data.
+                    - `game_progress`: Update the user's game progress.
+                    - `characters`: Add a new character to the user's account.
+                arguments:
+                  type: array
+                  items:
+                    type: string
+                  description: >-
+                    Arguments required for the operation. The first argument is
+                    always the username. Additional arguments depend on the
+                    operation.
+                progress:
+                  type: object
+                  description: >-
+                    The progress data to update (required for `game_progress`).
+                  properties:
+                    level:
+                      type: integer
+                    experience:
+                      type: integer
+                character:
+                  type: object
+                  description: >-
+                    The character data to add (required for `characters`).
+                  properties:
+                    name:
+                      type: string
+                    type:
+                      type: string
+                    level:
+                      type: integer
+              required:
+                - operation_type
+                - arguments
+            examples:
+              enter_game:
+                value:
+                  operation_type: enter_game
+                  arguments: ["test_user"]
+              game_progress:
+                value:
+                  operation_type: game_progress
+                  arguments: ["test_user"]
+                  progress:
+                    level: 2
+                    experience: 150
+              characters:
+                value:
+                  operation_type: characters
+                  arguments: ["test_user"]
+                  character:
+                    name: "ThunderWolf"
+                    type: "electric"
+                    level: 1
+      responses:
+        '200':
+          description: Operation successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  progress:
+                    type: object
+                    properties:
+                      level:
+                        type: integer
+                      experience:
+                        type: integer
+                  characters:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        type:
+                          type: string
+                        level:
+                          type: integer
+              examples:
+                enter_game_success:
+                  value:
+                    message: Welcome to the game!
+                    progress:
+                      level: 1
+                      experience: 0
+                    characters:
+                      - name: FireDragon
+                        type: fire
+                        level: 1
+                      - name: WaterPhoenix
+                        type: water
+                        level: 1
+                      - name: EarthGolem
+                        type: earth
+                        level: 1
+                game_progress_success:
+                  value:
+                    message: Progress updated successfully
+                characters_success:
+                  value:
+                    message: Character added successfully
+        '400':
+          description: Invalid input or request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              examples:
+                invalid_input:
+                  value:
+                    error: invalid_input
+                    message: Progress must be a JSON object
+                invalid_character:
+                  value:
+                    error: invalid_input
+                    message: Character must be a JSON object with 'name' and 'type'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: unauthorized
+                message: Invalid or missing username
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: server_error
+                message: An unexpected error occurred

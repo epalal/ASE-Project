@@ -1,0 +1,207 @@
+openapi: 3.0.3
+info:
+  title: Monster Tamer - Monster Service API
+  description: >
+    Microservizio per la gestione dell'enciclopedia globale dei 16 mostri (US-10, US-11),
+    dell'assegnazione iniziale via Lazy Init (US-06), della collezione personale del giocatore (US-09)
+    e dell'assegnazione interna delle ricompense post-incontro (US-12).
+  version: 1.0.0
+
+servers:
+  - url: https://localhost:5002
+    description: Monster Service (Internal HTTPS endpoint)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT firmato con algoritmo RS256 dal Player/Auth Service.
+    InternalSecretAuth:
+      type: apiKey
+      in: header
+      name: X-Internal-Secret
+      description: Segreto condiviso tra Encounter Service e Monster Service per chiamate backend-to-backend.
+
+  schemas:
+    Monster:
+      type: object
+      required: [id, name, element, power, hp, image_url]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 16
+          example: 9
+        name:
+          type: string
+          example: Emberbun
+        element:
+          type: string
+          enum: [Fire, Water, Darkness, Earth]
+          example: Fire
+        power:
+          type: integer
+          description: Statistica ATK / Power del mostro
+          example: 3
+        hp:
+          type: integer
+          description: Punti ferita (HP) del mostro
+          example: 2
+        image_url:
+          type: string
+          example: /assets/monsters/emberbun.png
+
+    OwnedMonster:
+      type: object
+      required: [ownership_id, player_id, acquired_at, monster]
+      properties:
+        ownership_id:
+          type: integer
+          example: 1
+        player_id:
+          type: string
+          example: player_123
+        acquired_at:
+          type: string
+          format: date-time
+          example: "2026-11-05T18:00:00Z"
+        monster:
+          $ref: '#/components/schemas/Monster'
+
+    RewardRequest:
+      type: object
+      required: [player_id, monster_id, encounter_id]
+      properties:
+        player_id:
+          type: string
+          example: player_123
+        monster_id:
+          type: integer
+          minimum: 1
+          maximum: 16
+          example: 11
+        encounter_id:
+          type: string
+          description: ID univoco dell'incontro per garantire l'idempotenza ed evitare duplicati
+          example: enc_987654
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Descrizione dell'errore
+
+paths:
+  /health:
+    get:
+      summary: Healthcheck del microservizio
+      responses:
+        '200':
+          description: Servizio attivo
+
+  /monsters:
+    get:
+      summary: Restituisce il catalogo completo dei 16 mostri (US-10)
+      tags: [Catalog]
+      responses:
+        '200':
+          description: Lista dei 16 mostri presenti nel gioco
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Monster'
+
+  /monsters/{monster_id}:
+    get:
+      summary: Restituisce statistiche e immagine di un singolo mostro (US-11)
+      tags: [Catalog]
+      parameters:
+        - name: monster_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Dettaglio del mostro trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monster'
+        '404':
+          description: ID mostro non valido o non trovato (fuori dal range 1-16)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /collection:
+    get:
+      summary: Restituisce la collezione del giocatore ed esegue la Lazy Init al primo accesso (US-06, US-09)
+      tags: [Collection]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Collezione personale del giocatore autenticato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  player_id:
+                    type: string
+                  count:
+                    type: integer
+                  collection:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OwnedMonster'
+        '401':
+          description: Token JWT mancante, scaduto o non valido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /monsters/reward:
+    post:
+      summary: Aggiunge un mostro vinto/catturato alla collezione del giocatore (US-12)
+      tags: [Internal Rewards]
+      security:
+        - InternalSecretAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardRequest'
+      responses:
+        '201':
+          description: Mostro aggiunto con successo alla collezione
+        '200':
+          description: Ricompensa già assegnata in precedenza per questo encounter_id (idempotente)
+        '400':
+          description: Payload JSON mancante o parametri invalidi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Header X-Internal-Secret mancante o errato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: monster_id inesistente nel catalogo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

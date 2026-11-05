@@ -3,21 +3,17 @@ openapi: 3.1.0
 info:
   title: ASE Project - Monster Tamer
   version: 1.0.0
-  description: >-
-    API per la gestione delle operazioni, la creazione di account, il login e
-    l'accesso al gioco.
+  description: API for management of sign in and login operations.
 
 servers:
   - url: http://localhost:5001
 
 paths:
-  /auth_service:
+  /create_account:
     post:
-      summary: Perform authentication and game-related operations
-      description: >-
-        This endpoint handles multiple operations such as creating an account,
-        logging in, entering the game, and managing progress or characters.
-      operationId: authService
+      summary: Create a new user account
+      description: This endpoint allows the creation of a new user account.
+      operationId: createAccount
       requestBody:
         required: true
         content:
@@ -25,109 +21,19 @@ paths:
             schema:
               type: object
               properties:
-                operation_type:
+                username:
                   type: string
-                  enum:
-                    - create_account
-                    - login
-                    - enter_game
-                    - game_progress
-                    - characters
-                  description: >-
-                    The type of operation to perform. Supported operations are:
-                    - `create_account`: Create a new user account.
-                    - `login`: Log in to an existing account.
-                    - `enter_game`: Enter the game after logging in.
-                    - `game_progress`: Retrieve or update game progress.
-                    - `characters`: Manage game characters.
-                arguments:
-                  type: array
-                  items:
-                    type: string
-                  description: >-
-                    Arguments required for the operation. The number and type of
-                    arguments depend on the operation:
-                    - `create_account`: [username, password]
-                    - `login`: [username, password]
-                    - `enter_game`: [username]
-                    - `game_progress`: [username]
-                    - `characters`: [username]
+                  description: The username for the new account.
+                password:
+                  type: string
+                  description: The password for the new account.
               required:
-                - operation_type
-                - arguments
-            examples:
-              create_account:
-                value:
-                  operation_type: create_account
-                  arguments: ["new_user", "new_password"]
-              login:
-                value:
-                  operation_type: login
-                  arguments: ["test_user", "test_password"]
-              enter_game:
-                value:
-                  operation_type: enter_game
-                  arguments: ["test_user"]
-              game_progress:
-                value:
-                  operation_type: game_progress
-                  arguments: ["test_user"]
-              characters:
-                value:
-                  operation_type: characters
-                  arguments: ["test_user"]
+                - username
+                - password
+            example:
+              username: new_user
+              password: new_password
       responses:
-        '200':
-          description: Operation successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  username:
-                    type: string
-                  progress:
-                    type: object
-                    properties:
-                      level:
-                        type: integer
-                      experience:
-                        type: integer
-                  characters:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        type:
-                          type: string
-                        level:
-                          type: integer
-              examples:
-                login_success:
-                  value:
-                    message: Login successful
-                    username: test_user
-                enter_game_success:
-                  value:
-                    message: Welcome to the game!
-                    username: test_user
-                    progress:
-                      level: 1
-                      experience: 0
-                    characters:
-                      - name: FireDragon
-                        type: fire
-                        level: 1
-                      - name: WaterPhoenix
-                        type: water
-                        level: 1
-                      - name: EarthGolem
-                        type: earth
-                        level: 1
         '201':
           description: Account created successfully
           content:
@@ -139,9 +45,12 @@ paths:
                     type: string
                   username:
                     type: string
+                  id:
+                    type: string
               example:
                 message: Account created successfully
                 username: new_user
+                id: 123e4567-e89b-12d3-a456-426614174000
         '400':
           description: Invalid input or request
           content:
@@ -153,29 +62,9 @@ paths:
                     type: string
                   message:
                     type: string
-              examples:
-                invalid_input:
-                  value:
-                    error: invalid_input
-                    message: Username and password must be strings
-                invalid_request:
-                  value:
-                    error: invalid_request
-                    message: Request body must be a JSON object
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                  message:
-                    type: string
               example:
-                error: unauthorized
-                message: Invalid username or password
+                error: invalid_input
+                message: Username and password must be strings
         '409':
           description: Conflict (e.g., user already exists)
           content:
@@ -203,4 +92,110 @@ paths:
                     type: string
               example:
                 error: server_error
+                message: Could not save user data
+
+  /login:
+    post:
+      summary: Log in to an existing account
+      description: This endpoint allows a user to log in to their account.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: The username of the account.
+                password:
+                  type: string
+                  description: The password of the account.
+              required:
+                - username
+                - password
+            example:
+              username: test_user
+              password: test_password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
+                  id:
+                    type: string
+                  token:
+                    type: string
+              example:
+                message: Successful login
+                username: test_user
+                id: 123e4567-e89b-12d3-a456-426614174000
+                token: 123e4567-e89b-12d3-a456-426614174001
+        '400':
+          description: Invalid input or request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: invalid_input
+                message: Username and password must be strings
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: unauthorized
+                message: Invalid username or password
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: server_error
                 message: An unexpected error occurred
+
+  /health:
+    get:
+      summary: Check the health of the service
+      description: This endpoint checks if the service is running and healthy.
+      operationId: health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+              example:
+                status: healthy

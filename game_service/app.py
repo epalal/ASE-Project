@@ -3,17 +3,37 @@ import json
 import os
 import atexit
 
-DATA_FILE = "/app/data/users_data.json"
+app = Flask(__name__)
+
+BASE_DIR = "/app"
+DATA_DIR = os.path.join(BASE_DIR, "data")
+DATA_FILE = os.path.join(DATA_DIR, "users_data.json")
+SESSION_FILE = os.path.join(DATA_DIR, "session_tokens.json")
+
 os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
 
 if os.path.exists(DATA_FILE):
     try:
-        with open(DATA_FILE, 'r') as f:
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
             users_db = json.load(f)
-    except json.JSONDecodeError:
+            if not isinstance(users_db, dict):
+                raise ValueError("Il file non contiene un oggetto JSON valido.")
+    except (json.JSONDecodeError, ValueError) as e:
+        app.logger.error(f"Errore durante la lettura del file {DATA_FILE}: {str(e)}")
         users_db = {}
 else:
+    app.logger.warning(f"Il file {DATA_FILE} non esiste. Inizializzo un database vuoto.")
     users_db = {}
+
+if os.path.exists(SESSION_FILE):
+    try:
+        with open(SESSION_FILE, 'r', encoding='utf-8') as f:
+            session_tokens = json.load(f)
+    except json.JSONDecodeError:
+        app.logger.error("Errore durante la lettura del file session_tokens.json")
+        session_tokens = {}
+else:
+    session_tokens = {}
 
 @atexit.register
 def save_data():
@@ -22,8 +42,6 @@ def save_data():
             json.dump(users_db, f)
     except Exception:
         pass
-
-app = Flask(__name__)
 
 def error(code, message, status=400):
     return jsonify(error=code, message=message), status
@@ -42,9 +60,31 @@ def require_arguments(body, expected_count):
         raise ValueError(f"Expected {expected_count} argument(s)")
     return arguments
 
+def validate_session_token():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise ValueError("Missing session token")
+    
+    token = auth_header.replace("Bearer ", "").strip()
+    
+    current_tokens = {}
+    if os.path.exists(SESSION_FILE):
+        try:
+            with open(SESSION_FILE, 'r', encoding='utf-8') as f:
+                current_tokens = json.load(f)
+        except json.JSONDecodeError:
+            app.logger.error("Error while reading file session_tokens.json")
+    
+    if token not in current_tokens:
+        raise ValueError("Invalid session token")
+        
+    return current_tokens[token]
+
 @app.post('/game_service')
 def game_service():
     try:
+        validate_session_token()
+
         body = require_json_body()
         operation_type = body.get("operation_type")
         if operation_type not in ["enter_game", "game_progress", "characters"]:

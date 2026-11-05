@@ -3,9 +3,7 @@ openapi: 3.1.0
 info:
   title: ASE Project - Game Service
   version: 1.0.0
-  description: >-
-    API per la gestione delle operazioni di gioco, inclusi l'accesso al gioco,
-    l'aggiornamento dei progressi e la gestione dei personaggi.
+  description: API for the management of game services.
 
 servers:
   - url: http://localhost:5002
@@ -14,8 +12,7 @@ paths:
   /game_service:
     post:
       summary: Perform game-related operations
-      description: >-
-        This endpoint handles multiple operations related to the game, such as
+      description: This endpoint handles multiple operations related to the game, such as
         entering the game, updating progress, and managing characters.
       operationId: gameService
       requestBody:
@@ -31,8 +28,7 @@ paths:
                     - enter_game
                     - game_progress
                     - characters
-                  description: >-
-                    The type of operation to perform. Supported operations are:
+                  description: The type of operation to perform. Supported operations are:
                     - `enter_game`: Enter the game and retrieve user data.
                     - `game_progress`: Update the user's game progress.
                     - `characters`: Add a new character to the user's account.
@@ -40,14 +36,11 @@ paths:
                   type: array
                   items:
                     type: string
-                  description: >-
-                    Arguments required for the operation. The first argument is
-                    always the username. Additional arguments depend on the
-                    operation.
+                  description: Arguments required for the operation. The first argument is
+                    always the username.
                 progress:
                   type: object
-                  description: >-
-                    The progress data to update (required for `game_progress`).
+                  description: The progress data to update (required for `game_progress`).
                   properties:
                     level:
                       type: integer
@@ -55,15 +48,12 @@ paths:
                       type: integer
                 character:
                   type: object
-                  description: >-
-                    The character data to add (required for `characters`).
+                  description: The character data to add (required for `characters`).
                   properties:
                     name:
                       type: string
                     type:
                       type: string
-                    level:
-                      type: integer
               required:
                 - operation_type
                 - arguments
@@ -86,7 +76,6 @@ paths:
                   character:
                     name: "ThunderWolf"
                     type: "electric"
-                    level: 1
       responses:
         '200':
           description: Operation successful
@@ -113,8 +102,6 @@ paths:
                           type: string
                         type:
                           type: string
-                        level:
-                          type: integer
               examples:
                 enter_game_success:
                   value:
@@ -125,13 +112,10 @@ paths:
                     characters:
                       - name: FireDragon
                         type: fire
-                        level: 1
                       - name: WaterPhoenix
                         type: water
-                        level: 1
                       - name: EarthGolem
                         type: earth
-                        level: 1
                 game_progress_success:
                   value:
                     message: Progress updated successfully
@@ -186,3 +170,21 @@ paths:
               example:
                 error: server_error
                 message: An unexpected error occurred
+
+  /health:
+    get:
+      summary: Health check
+      description: Check if the service is running and healthy.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+              example:
+                status: healthy

@@ -1,0 +1,52 @@
+{
+    "eli": {
+        "id": "c0193202-e402-44a6-929b-76d90548710d",
+        "password": "$2b$12$zIhKrcsRCdL1TmBCrFpA0uuoqnpwP/2FSxdnU92UwrOaUc9r2bSE2",
+        "progress": {
+            "level": 1,
+            "experience": 0
+        },
+        "characters": [
+            {
+                "name": "FireDragon",
+                "type": "fire",
+                "level": 1
+            },
+            {
+                "name": "WaterPhoenix",
+                "type": "water",
+                "level": 1
+            },
+            {
+                "name": "EarthGolem",
+                "type": "earth",
+                "level": 1
+            }
+        ]
+    },
+    "elisa": {
+        "id": "cef837fc-40db-4f4a-b7f8-ad898f398a54",
+        "password": "$2b$12$bsPYqclHacbMNJsYFT2c9udbhAu4H2Z7NokA2f3JwlLWaPlEpY3ou",
+        "progress": {
+            "level": 1,
+            "experience": 0
+        },
+        "characters": [
+            {
+                "name": "FireDragon",
+                "type": "fire",
+                "level": 1
+            },
+            {
+                "name": "WaterPhoenix",
+                "type": "water",
+                "level": 1
+            },
+            {
+                "name": "EarthGolem",
+                "type": "earth",
+                "level": 1
+            }
+        ]
+    }
+}

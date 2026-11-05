@@ -4,8 +4,8 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-AUTH_URL = os.environ.get("AUTH_URL", "http://auth:5001").rstrip("/")
-GAME_URL = os.environ.get("GAME_URL", "http://game:5002").rstrip("/")
+AUTH_URL = os.environ.get("AUTH_URL", "http://localhost:5001").rstrip("/")
+GAME_URL = os.environ.get("GAME_URL", "http://localhost:5002").rstrip("/")
 REQUEST_TIMEOUT = 3
 
 def error(code, message, status=400):
@@ -18,18 +18,6 @@ def require_json_body():
     return body
 
 def downstream_failure(response):
-    if response.status_code in (502, 504):
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = None
-        if (
-            isinstance(payload, dict)
-            and isinstance(payload.get("error"), str)
-            and isinstance(payload.get("message"), str)
-        ):
-            return jsonify(payload), response.status_code
-    
     try:
         return jsonify(response.json()), response.status_code
     except ValueError:
@@ -39,7 +27,6 @@ def forward(method, url, **kwargs):
     try:
         res = requests.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
         if res.status_code >= 400:
-            app.logger.warning("Upstream status %s from %s", res.status_code, url)
             return None, downstream_failure(res)
         
         if res.content:
@@ -50,11 +37,8 @@ def forward(method, url, **kwargs):
         return {}, None
 
     except requests.Timeout:
-        return None, error(
-            "upstream_timeout", "An internal service did not respond in time", 504
-        )
+        return None, error("upstream_timeout", "An internal service did not respond in time", 504)
     except (requests.RequestException, ValueError):
-        app.logger.exception("Cannot contact %s", url)
         return None, error("upstream_error", "An internal service request failed", 502)
 
 @app.post("/create_account")
@@ -64,10 +48,7 @@ def proxy_create_account():
     except ValueError as exc:
         return error("invalid_request", str(exc))
 
-    data, failure = forward(
-        "POST", f"{AUTH_URL}/create_account",
-        json=body,
-    )
+    data, failure = forward("POST", f"{AUTH_URL}/create_account", json=body)
     if failure is not None:
         return failure
     return jsonify(data), 201
@@ -79,10 +60,7 @@ def proxy_login():
     except ValueError as exc:
         return error("invalid_request", str(exc))
 
-    data, failure = forward(
-        "POST", f"{AUTH_URL}/login",
-        json=body,
-    )
+    data, failure = forward("POST", f"{AUTH_URL}/login", json=body)
     if failure is not None:
         return failure
     return jsonify(data), 200
@@ -90,6 +68,8 @@ def proxy_login():
 @app.get("/game")
 def proxy_game():
     username = request.args.get('username')
+    auth_header = request.headers.get('Authorization')
+    
     if not username:
         return error("invalid_request", "Missing username", 400)
     
@@ -97,46 +77,15 @@ def proxy_game():
         "operation_type": "enter_game",
         "arguments": [username]
     }
-    data, failure = forward("POST", f"{GAME_URL}/game_service", json=payload)
+    
+    headers = {"Authorization": auth_header} if auth_header else {}
+    data, failure = forward("POST", f"{GAME_URL}/game_service", json=payload, headers=headers)
+    
     if failure is not None:
         return failure
     return jsonify(data), 200
 
-@app.post("/game/progress")
-def proxy_update_progress():
-    try:
-        body = require_json_body()
-    except ValueError as exc:
-        return error("invalid_request", str(exc))
-
-    payload = {
-        "operation_type": "game_progress",
-        "arguments": [body.get("username")],
-        "progress": body.get("progress")
-    }
-    data, failure = forward("POST", f"{GAME_URL}/game_service", json=payload)
-    if failure is not None:
-        return failure
-    return jsonify(data), 200
-
-@app.post("/game/characters")
-def proxy_add_character():
-    try:
-        body = require_json_body()
-    except ValueError as exc:
-        return error("invalid_request", str(exc))
-
-    payload = {
-        "operation_type": "characters",
-        "arguments": [body.get("username")],
-        "character": body.get("character")
-    }
-    data, failure = forward("POST", f"{GAME_URL}/game_service", json=payload)
-    if failure is not None:
-        return failure
-    return jsonify(data), 200
-
-@app.route('/', methods=['GET'])
+@app.get("/")
 def home():
     return '''
     <!DOCTYPE html>
@@ -187,6 +136,7 @@ def home():
 
         <script>
             let loggedInUser = null;
+            let authToken = null;
 
             document.getElementById('createForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -196,7 +146,7 @@ def home():
                 const response = await fetch('/create_account', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ arguments: [username, password] })
+                    body: JSON.stringify({ username: username, password: password })
                 });
 
                 const data = await response.json();
@@ -218,7 +168,7 @@ def home():
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ arguments: [username, password] })
+                    body: JSON.stringify({ username: username, password: password })
                 });
 
                 const data = await response.json();
@@ -227,6 +177,7 @@ def home():
                     resultDiv.style.color = 'green';
                     resultDiv.innerText = data.message;
                     loggedInUser = data.username;
+                    authToken = data.token;
                 } else {
                     resultDiv.style.color = 'red';
                     resultDiv.innerText = 'Error: ' + (data.message || data.error);
@@ -234,17 +185,19 @@ def home():
             });
 
             document.getElementById('viewGame').addEventListener('click', async function() {
-                if (!loggedInUser) {
+                if (!loggedInUser || !authToken) {
                     alert("You have to login first.");
                     return;
                 }
 
-                const response = await fetch(`/game?username=${loggedInUser}`);
+                const response = await fetch(`/game?username=${loggedInUser}`, {
+                    headers: { 'Authorization': authToken }
+                });
                 const data = await response.json();
                 const resultDiv = document.getElementById('game-result');
                 if (response.ok) {
                     resultDiv.style.color = 'green';
-                    resultDiv.innerText = `Progress: Level ${data.progress.level}, Experience ${data.progress.experience}\n` +
+                    resultDiv.innerText = `Progress: Level ${data.progress.level}, Experience ${data.progress.experience}\\n` +
                                         'Characters: ' + data.characters.map(c => c.name).join(', ');
                 } else {
                     resultDiv.style.color = 'red';

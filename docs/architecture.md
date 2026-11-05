@@ -71,7 +71,7 @@ Calls between services use paths under `/internal/`. The gateway never routes `/
 
 ### 4. Encounters are resolved on the server, and each reward is applied once
 
-The client sends only the challenge it wants to face. The Encounter Service reads the team from the Monster Service, computes the win probability, rolls on the server and stores the result. After a win it asks the Monster Service to apply the reward and sends the encounter ID. The Monster Service records each encounter ID and refuses a second reward for the same one.
+The client only chooses a challenge and then an action. The Encounter Service reads the team from the Monster Service, computes the chances, rolls on the server and stores the result. After a win or a capture it asks the Monster Service to apply the reward and sends the encounter ID. The Monster Service records each encounter ID and refuses a second reward for the same one.
 
 So the client can never submit an outcome, and a double click or a retry cannot reward twice. If the reward call fails, the encounter keeps `reward_status = pending` and the reward can be retried. The requirements ask us to document how contingencies like this are handled.
 
@@ -135,9 +135,9 @@ There is no session or token table, because a JWT carries its own expiry. We sto
 | `id` | UUID, primary key | The team points to this ID |
 | `player_id` | UUID, not null | Owner, from the token |
 | `species_id` | references `species` | Which monster this is |
-| `atk`, `hp` | integer, greater than 0 | Current stats: start at the base values and grow with rewards |
+| `atk`, `hp` | integer, greater than 0 | Current stats: they start at the base values and grow by 1 per attack win, up to the base value + 3 |
 | `source` | `starter` or `capture` | Where it came from (US-06 or US-12) |
-| `source_encounter_id` | UUID, unique, nullable | The win that captured it; the same win cannot capture twice |
+| `source_encounter_id` | UUID, unique, nullable | The encounter that captured it; the same encounter cannot capture twice |
 | `acquired_at` | timestamp | Record keeping |
 | | unique (`player_id`, `species_id`) | No duplicates: a player owns at most one of each species |
 
@@ -157,33 +157,38 @@ The code that saves the team checks that it has exactly three monsters, and repl
 |---|---|---|
 | `encounter_id` | UUID, primary key | A second reward for the same encounter is rejected (rule 4) |
 | `player_id` | UUID, not null | Who received it |
-| `atk_bonus`, `hp_bonus` | integer | The stat increase applied |
-| `captured_species_id` | nullable | The monster captured, if any |
+| `atk_bonus`, `hp_bonus` | integer | The stat increase from an attack win; 0 for a capture |
+| `captured_species_id` | nullable | The monster captured, if the action was a capture |
 | `applied_at` | timestamp | Record keeping |
 
 ### encounter-db (Encounter Service)
 
-`challenge`: encounters a player can choose
+`challenge`: encounters a player can choose, 16 rows, one per monster
 
 | Column | Rule | Why |
 |---|---|---|
 | `id` | primary key | |
 | `name`, `description` | not null | Shown in the challenge list (US-17) |
-| `wild_species_id` | not null | The monster faced; its stats are read from the Monster Service at fight time, so the catalogue has a single owner. Challenges differ by this monster's type and stats; there is no separate difficulty level |
+| `wild_species_id` | not null, unique | The monster faced; its stats are read from the Monster Service when the encounter opens, so the catalogue has a single owner. Challenges differ by this monster's type and stats; there is no separate difficulty level |
 
-`encounter`: one row per fight
+`encounter`: one row per encounter
 
 | Column | Rule | Why |
 |---|---|---|
 | `id` | UUID, primary key | Sent with the reward request so the reward is applied once |
-| `player_id` | UUID, not null | Whose fight |
+| `player_id` | UUID, not null | Whose encounter |
 | `challenge_id` | references `challenge` | Which challenge |
-| `team_snapshot` | JSON, not null | The three monsters with their stats at fight time; history stays correct after rewards change the stats |
-| `wild_snapshot` | JSON, not null | The wild monster's stats used in the fight |
-| `team_power`, `challenge_power`, `p_win`, `roll` | not null | The full calculation, so any result can be checked; also feeds the result and history pages (US-20, US-24) |
-| `result` | `win` or `loss` | |
+| `status` | `open` or `closed` | An open encounter is waiting for the player's action |
+| | unique (`player_id`) where `status` is `open` | The database allows only one open encounter per player |
+| `team_snapshot` | JSON, not null | The three monsters with their stats when the encounter opened; history stays correct after rewards change the stats |
+| `wild_snapshot` | JSON, not null | The wild monster's stats used in the encounter |
+| `team_power`, `challenge_power`, `p_win` | not null | The full calculation, so any result can be checked; also feeds the result and history pages (US-20, US-24) |
+| `p_capture` | nullable | Empty when the player already owns the wild monster, because capture is not offered |
+| `action` | `attack`, `capture` or `escape`; empty while open | What the player chose (US-21, US-22) |
+| `roll` | nullable | The random number; empty while open and for an escape |
+| `result` | `win`, `loss`, `captured`, `failed` or `escaped`; empty while open | |
 | `reward_status` | `none`, `pending`, `applied` or `failed` | Shows a reward that still needs to be retried |
-| `created_at` | timestamp | |
+| `created_at`, `closed_at` | timestamp | |
 
 ### Rules for all databases
 
@@ -191,15 +196,16 @@ Each service connects with its own login, which can only reach its own database;
 
 ## Encounter rules
 
-We keep the formula agreed in issue #10 and shown on slide 3. Only the monster power changed: it used to be the monster's level (1, 2 or 3), and the 16 monsters now have ATK and HP instead of levels.
+We keep the formula agreed in issue #10 and shown on slide 3. Only the monster power changed: it used to be the monster's level (1, 2 or 3), and the 16 monsters now have ATK and HP instead of levels. The actions come from US-21 and US-22.
+
+### Power and chances
 
 1. Monster power = (ATK + HP) / 2. Team monsters use their current stats, and the wild monster uses its base stats.
 2. Each team monster's power is adjusted against the wild monster: +1 if its type beats the wild monster's type, -1 if the wild monster's type beats it, 0 otherwise. The adjusted power never goes below 0.
 3. Team power = the sum of the three adjusted powers.
 4. Challenge power = 3 × the wild monster's power, which puts one monster on the same scale as a team of three.
 5. `P(win) = 1 / (1 + exp(-0.6 × (team_power - challenge_power)))`. Equal power gives 50%, a 5-point advantage about 95% and a 5-point disadvantage about 5%.
-6. The Encounter Service draws a random number between 0 and 1 with a secure generator, and the player wins if it is lower than P(win).
-7. A win increases the ATK and HP of the team monsters and captures the wild monster if the player does not own it yet. A loss gives nothing.
+6. `P(capture) = 0.75 × P(win)`.
 
 Type cycle: Fire beats Dark, Dark beats Grass, Grass beats Water, Water beats Fire. All other matchups are neutral.
 
@@ -211,9 +217,43 @@ Example: a team of Sproutpaw (Grass, 2/2), Drifin (Water, 2/3) and Emberbun (Fir
 | Drifin | (2 + 3) / 2 = 2.5 | Water beats Fire, +1 | 3.5 |
 | Emberbun | (3 + 2) / 2 = 2.5 | neutral | 2.5 |
 
-Team power = 8, challenge power = 3 × 2.5 = 7.5, P(win) ≈ 57%.
+Team power = 8, challenge power = 3 × 2.5 = 7.5, so P(win) ≈ 57% and P(capture) ≈ 43%. Capture is not offered in this example, because the player already owns an Emberbun.
+
+### How an encounter runs
+
+There are 16 challenges, one for each monster.
+
+1. The player opens an encounter by choosing a challenge. The Encounter Service saves the team and the wild monster as they are at that moment and computes P(win) and P(capture). Capture is offered only if the player does not own that monster yet. A player can have one open encounter; opening a new one closes the old one as `escaped`.
+2. The player picks one action. For attack and capture, the Encounter Service draws a random number between 0 and 1 with a secure generator, and the action succeeds if the number is lower than its chance.
+
+   | Action | Success | Failure |
+   |---|---|---|
+   | Attack | `win`: each team monster gets +1 ATK and +1 HP, up to its base value + 3 | `loss`: nothing happens |
+   | Capture | `captured`: the wild monster joins the collection | `failed`: nothing happens |
+   | Escape | `escaped`: always works, with no roll | |
+
+3. The encounter closes and stays in the history with the action, the result, both chances and the roll.
+
+### Why these rules
 
 We use (ATK + HP) / 2 because the requirements ask for at least two characteristics that influence encounters, and this way both stats count equally. The values also stay small like the old levels, so the agreed 0.6 factor still works. With ATK + HP the values double and most fights become certain wins or certain losses. With ATK alone, HP would have no effect.
+
+Attack and capture give different rewards, so the player's choice changes what they get (US-22: "so that my decisions can influence its outcome"). Attack makes the team stronger and capture grows the collection. Capture is a bit harder than attack, so even a strong team takes a risk when it tries to catch a monster.
+
+A lost attack costs nothing, so an escape that could fail would only change the label in the history. Escape therefore always works while the encounter is open, which is what "when the game rules allow it" means in US-21.
+
+Without a limit, the starter monsters would keep growing until they beat every monster, and capturing would stop mattering. With the +3 limit, a fully grown starter team still has only about 11% against Dolwhale and 18% against Cindrake. The limit is one line in the Monster Service: `atk = min(atk + 1, base_atk + 3)`.
+
+Allowing one open encounter per player needs no timers or cleanup jobs. Because the team is saved when the encounter opens, the chances the player sees are the ones that get rolled.
+
+### API changes to contracts C7, C9 and C10 (issue #21)
+
+| Contract | Call | Change |
+|---|---|---|
+| C7 | `POST /encounters` with `{"challenge_id": ...}` | Opens the encounter and returns its ID, the wild monster, the team, `p_win` and `p_capture` (`null` when capture is not offered). It no longer returns the result |
+| C7 | `POST /encounters/{id}/action` with `{"action": "attack"}`, `"capture"` or `"escape"` | Resolves the encounter and returns the result. Returns 409 if the encounter is already closed or capture is not offered, and 404 if the encounter belongs to another player |
+| C9 | `GET /internal/players/{id}/team` | Also returns `owned_species_ids`, so the Encounter Service knows whether to offer capture |
+| C10 | `POST /internal/rewards` | Two kinds of reward: stats (`owned_monster_ids` from the snapshot, `atk_bonus`, `hp_bonus`) or capture (`captured_species_id`). The Monster Service applies the +3 limit, because it owns the stats |
 
 ## Decisions taken
 
@@ -222,13 +262,15 @@ We use (ATK + HP) / 2 because the requirements ask for at least two characterist
 | Monster power | (ATK + HP) / 2, replacing the level |
 | Type names | Fire, Water, Grass, Dark, as on the monster cards |
 | Difficulty levels | None; each challenge is one wild monster |
+| Challenges | 16, one per monster |
+| Encounter flow | Two steps: open the encounter, then choose one action |
+| Actions | Attack (a win raises stats), capture (a success adds the monster), escape (always works) |
+| Capture chance | 0.75 × P(win) |
+| Capturing a monster the player already owns | Not offered; the server returns 409 |
+| Reward for an attack win | +1 ATK and +1 HP for each team monster, up to the base value + 3 |
+| Reward for a loss or a failed capture | Nothing |
+| Open encounters | At most one per player; opening a new one closes the old one as escaped |
 | Database separation | One PostgreSQL container, login and volume per service |
-| Capturing a monster the player already owns | No duplicate; the player gets only the ATK/HP reward |
 | A separate "progress" table (level, experience) | Not used; progress is the collection, the monsters' stats and the encounter history |
 | Gateway owner | Elisa |
 | Team endpoints (`GET /team`, `PUT /team`) | Elena, in the Monster Service; team rules from Hatem |
-
-## Still open
-
-- How much a win increases ATK and HP, and whether there is an upper limit.
-- The actions for US-21 and US-22 (attack, capture, escape) and how they change the encounter flow.

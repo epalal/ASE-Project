@@ -15,8 +15,8 @@ flowchart TB
 
         subgraph services["Application layer"]
             PS["Player Service<br/>registration, login<br/>issues JWT"]
-            MS["Monster Service<br/>catalogue, owned monsters,<br/>team, rewards"]
-            ES["Encounter Service<br/>challenges, resolution,<br/>history"]
+            MS["Monster Service<br/>catalogue, owned monsters,<br/>rewards"]
+            ES["Encounter Service<br/>team, challenges,<br/>resolution, history"]
         end
 
         subgraph data["Data layer (one database per service)"]
@@ -30,7 +30,7 @@ flowchart TB
     GW -- HTTPS --> PS
     GW -- HTTPS --> MS
     GW -- HTTPS --> ES
-    ES -- "HTTPS /internal<br/>get team · apply reward" --> MS
+    ES -- "HTTPS /internal<br/>get monsters · apply reward" --> MS
     PS -- TLS --> PDB
     MS -- TLS --> MDB
     ES -- TLS --> EDB
@@ -44,8 +44,8 @@ Only the gateway is published to the host. The three services and the three data
 |---|---|---|
 | API Gateway | Routing of public URLs to services | Player, Monster, Encounter |
 | Player Service | Accounts and credentials; signs JWTs | Nobody |
-| Monster Service | Monster catalogue, owned monsters with their own ATK/HP, current team, applied rewards | Nobody |
-| Encounter Service | Challenges, encounter resolution, encounter history | Monster (`/internal` only) |
+| Monster Service | Monster catalogue, owned monsters with their own ATK/HP, applied rewards | Nobody |
+| Encounter Service | Current team, challenges, encounter resolution, encounter history | Monster (`/internal` only) |
 
 Calls go one way. The Encounter Service is the only service that calls another one, and it only calls the Monster Service.
 
@@ -71,7 +71,7 @@ Calls between services use paths under `/internal/`. The gateway never routes `/
 
 ### 4. Encounters are resolved on the server, and each reward is applied once
 
-The client only chooses a challenge and then an action. The Encounter Service reads the team from the Monster Service, computes the chances, rolls on the server and stores the result. After a win or a capture it asks the Monster Service to apply the reward and sends the encounter ID. The Monster Service records each encounter ID and refuses a second reward for the same one.
+The client only chooses a challenge and then an action. The Encounter Service reads the player's team from its own database and the monsters' current stats from the Monster Service, computes the chances, rolls on the server and stores the result. After a win or a capture it asks the Monster Service to apply the reward and sends the encounter ID. The Monster Service records each encounter ID and refuses a second reward for the same one.
 
 So the client can never submit an outcome, and a double click or a retry cannot reward twice. If the reward call fails, the encounter keeps `reward_status = pending` and the reward can be retried. The requirements ask us to document how contingencies like this are handled.
 
@@ -101,7 +101,7 @@ The gateway follows the pattern from Labs 5 and 6: a Flask app that forwards req
 
 A species is one of the 16 monsters in the catalogue and is the same for every player. An owned monster is one player's copy of a species, with its own ATK and HP. Rewards change the owned monster and leave the species alone.
 
-The player IDs stored in the Monster and Encounter databases are copied from the token. They are not foreign keys, because separate databases cannot reference each other.
+The player IDs stored in the Monster and Encounter databases are copied from the token, and the owned monster and species IDs stored in the Encounter database come from the Monster Service. None of them are foreign keys, because separate databases cannot reference each other.
 
 ### player-db (Player Service)
 
@@ -141,16 +141,6 @@ There is no session or token table, because a JWT carries its own expiry. We sto
 | `acquired_at` | timestamp | Record keeping |
 | | unique (`player_id`, `species_id`) | No duplicates: a player owns at most one of each species |
 
-`team_member`: the three team slots
-
-| Column | Rule | Why |
-|---|---|---|
-| `player_id`, `slot` | primary key; `slot` is 1, 2 or 3 | At most three slots, one monster per slot |
-| `owned_monster_id` | references `owned_monster` together with `player_id` | The database itself rejects a monster the player does not own |
-| | unique (`player_id`, `owned_monster_id`) | The same monster cannot fill two slots |
-
-The code that saves the team checks that it has exactly three monsters, and replaces the three slots in one transaction.
-
 `applied_reward`: rewards already given
 
 | Column | Rule | Why |
@@ -162,6 +152,18 @@ The code that saves the team checks that it has exactly three monsters, and repl
 | `applied_at` | timestamp | Record keeping |
 
 ### encounter-db (Encounter Service)
+
+`team_member`: the three team slots
+
+| Column | Rule | Why |
+|---|---|---|
+| `player_id`, `slot` | primary key; `slot` is 1, 2 or 3 | At most three slots, one monster per slot |
+| `owned_monster_id` | UUID, not null | One of the player's monsters in the Monster Service |
+| | unique (`player_id`, `owned_monster_id`) | The same monster cannot fill two slots |
+
+When the player saves a team, the Encounter Service asks the Monster Service for the player's monsters and accepts the team only if it has exactly three different monsters that the player owns. It then replaces the three slots in one transaction.
+
+The team lives here because it only exists to prepare encounters (US-14: "so that I can prepare for an encounter"). The same person builds the team stories (US-14, 15, 16) and the encounter stories, so nobody waits on a handoff. Elena suggested the move.
 
 `challenge`: encounters a player can choose, 16 rows, one per monster
 
@@ -223,7 +225,7 @@ Team power = 8, challenge power = 3 × 2.5 = 7.5, so P(win) ≈ 57% and P(captur
 
 There are 16 challenges, one for each monster.
 
-1. The player opens an encounter by choosing a challenge. The Encounter Service saves the team and the wild monster as they are at that moment and computes P(win) and P(capture). Capture is offered only if the player does not own that monster yet. A player can have one open encounter; opening a new one closes the old one as `escaped`.
+1. The player opens an encounter by choosing a challenge. The Encounter Service reads the player's team, gets the current stats of those three monsters from the Monster Service, and saves them with the wild monster as they are at that moment. It then computes P(win) and P(capture). Capture is offered only if the player does not own that monster yet. If the player has not saved a valid team, the encounter does not open (409). A player can have one open encounter; opening a new one closes the old one as `escaped`.
 2. The player picks one action. For attack and capture, the Encounter Service draws a random number between 0 and 1 with a secure generator, and the action succeeds if the number is lower than its chance.
 
    | Action | Success | Failure |
@@ -246,13 +248,14 @@ Without a limit, the starter monsters would keep growing until they beat every m
 
 Allowing one open encounter per player needs no timers or cleanup jobs. Because the team is saved when the encounter opens, the chances the player sees are the ones that get rolled.
 
-### API changes to contracts C7, C9 and C10 (issue #21)
+### API changes to contracts C5, C7, C9 and C10 (issue #21)
 
 | Contract | Call | Change |
 |---|---|---|
-| C7 | `POST /encounters` with `{"challenge_id": ...}` | Opens the encounter and returns its ID, the wild monster, the team, `p_win` and `p_capture` (`null` when capture is not offered). It no longer returns the result |
+| C5 | `GET /team`, `PUT /team` | Move from the Monster Service to the Encounter Service, built by Hatem. `PUT /team` takes three owned monster IDs and returns 400 if the team breaks a rule |
+| C7 | `POST /encounters` with `{"challenge_id": ...}` | Opens the encounter and returns its ID, the wild monster, the team, `p_win` and `p_capture` (`null` when capture is not offered). It no longer returns the result. Returns 409 if the player has no valid team |
 | C7 | `POST /encounters/{id}/action` with `{"action": "attack"}`, `"capture"` or `"escape"` | Resolves the encounter and returns the result. Returns 409 if the encounter is already closed or capture is not offered, and 404 if the encounter belongs to another player |
-| C9 | `GET /internal/players/{id}/team` | Also returns `owned_species_ids`, so the Encounter Service knows whether to offer capture |
+| C9 | `GET /internal/players/{id}/monsters` | Replaces `GET /internal/players/{id}/team`. Returns the player's owned monsters with their species, type and current ATK and HP. The Encounter Service uses it to check a team when it is saved, to read the stats when an encounter opens, and to decide whether to offer capture |
 | C10 | `POST /internal/rewards` | Two kinds of reward: stats (`owned_monster_ids` from the snapshot, `atk_bonus`, `hp_bonus`) or capture (`captured_species_id`). The Monster Service applies the +3 limit, because it owns the stats |
 
 ## Decisions taken
@@ -270,7 +273,8 @@ Allowing one open encounter per player needs no timers or cleanup jobs. Because 
 | Reward for an attack win | +1 ATK and +1 HP for each team monster, up to the base value + 3 |
 | Reward for a loss or a failed capture | Nothing |
 | Open encounters | At most one per player; opening a new one closes the old one as escaped |
+| Opening an encounter without a valid team | Refused with 409 |
 | Database separation | One PostgreSQL container, login and volume per service |
 | A separate "progress" table (level, experience) | Not used; progress is the collection, the monsters' stats and the encounter history |
 | Gateway owner | Elisa |
-| Team endpoints (`GET /team`, `PUT /team`) | Elena, in the Monster Service; team rules from Hatem |
+| Team (table, `GET /team`, `PUT /team`) | Encounter Service, built by Hatem; moved from the Monster Service on Elena's suggestion |

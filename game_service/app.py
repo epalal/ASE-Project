@@ -17,20 +17,20 @@ if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             users_db = json.load(f)
             if not isinstance(users_db, dict):
-                raise ValueError("Il file non contiene un oggetto JSON valido.")
+                raise ValueError("File doesn't contain a valid JSON object.")
     except (json.JSONDecodeError, ValueError) as e:
-        app.logger.error(f"Errore durante la lettura del file {DATA_FILE}: {str(e)}")
+        app.logger.error(f"Error while reading file {DATA_FILE}: {str(e)}")
         users_db = {}
 else:
-    app.logger.warning(f"Il file {DATA_FILE} non esiste. Inizializzo un database vuoto.")
+    app.logger.warning(f"File {DATA_FILE} doesn't exist. Initializing an empty file.")
     users_db = {}
 
 if os.path.exists(SESSION_FILE):
     try:
         with open(SESSION_FILE, 'r', encoding='utf-8') as f:
             session_tokens = json.load(f)
-    except json.JSONDecodeError:
-        app.logger.error("Errore durante la lettura del file session_tokens.json")
+    except json.JSONDecodeError as e:
+        app.logger.error(f"Errore while reading file {SESSION_FILE}: {str(e)}")
         session_tokens = {}
 else:
     session_tokens = {}
@@ -72,16 +72,16 @@ def validate_session_token():
         try:
             with open(SESSION_FILE, 'r', encoding='utf-8') as f:
                 current_tokens = json.load(f)
-        except json.JSONDecodeError:
-            app.logger.error("Error while reading file session_tokens.json")
+        except json.JSONDecodeError as e: 
+            app.logger.error(f"Error while reading file session_tokens.json: {str(e)}")
     
     if token not in current_tokens:
         raise ValueError("Invalid session token")
         
     return current_tokens[token]
 
-@app.post('/game_service')
-def game_service():
+@app.post('/statistics')
+def statistics():
     try:
         validate_session_token()
 

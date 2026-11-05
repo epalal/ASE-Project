@@ -9,12 +9,12 @@ servers:
   - url: http://localhost:5002
 
 paths:
-  /game_service:
+  /statistics:
     post:
       summary: Perform game-related operations
       description: This endpoint handles multiple operations related to the game, such as
         entering the game, updating progress, and managing characters.
-      operationId: gameService
+      operationId: GameData
       requestBody:
         required: true
         content:

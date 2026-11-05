@@ -97,8 +97,8 @@ def require_arguments(body, expected_count):
         raise ValueError(f"Expected {expected_count} argument(s)")
     return arguments
 
-@app.post('/create_account')
-def create_account():
+@app.post('/account')
+def account():
     try:
         body = require_json_body()
 

@@ -41,14 +41,14 @@ def forward(method, url, **kwargs):
     except (requests.RequestException, ValueError):
         return None, error("upstream_error", "An internal service request failed", 502)
 
-@app.post("/create_account")
-def proxy_create_account():
+@app.post("/account")
+def proxy_account():
     try:
         body = require_json_body()
     except ValueError as exc:
         return error("invalid_request", str(exc))
 
-    data, failure = forward("POST", f"{AUTH_URL}/create_account", json=body)
+    data, failure = forward("POST", f"{AUTH_URL}/account", json=body)
     if failure is not None:
         return failure
     return jsonify(data), 201
@@ -65,8 +65,8 @@ def proxy_login():
         return failure
     return jsonify(data), 200
 
-@app.get("/game")
-def proxy_game():
+@app.get("/statistics")
+def proxy_statistics():
     username = request.args.get('username')
     auth_header = request.headers.get('Authorization')
     
@@ -79,7 +79,7 @@ def proxy_game():
     }
     
     headers = {"Authorization": auth_header} if auth_header else {}
-    data, failure = forward("POST", f"{GAME_URL}/game_service", json=payload, headers=headers)
+    data, failure = forward("POST", f"{GAME_URL}/statistics", json=payload, headers=headers)
     
     if failure is not None:
         return failure
@@ -143,7 +143,7 @@ def home():
                 const username = document.getElementById('reg-username').value;
                 const password = document.getElementById('reg-password').value;
 
-                const response = await fetch('/create_account', {
+                const response = await fetch('/account', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username, password: password })
@@ -190,7 +190,7 @@ def home():
                     return;
                 }
 
-                const response = await fetch(`/game?username=${loggedInUser}`, {
+                const response = await fetch(`/statistics?username=${loggedInUser}`, {
                     headers: { 'Authorization': authToken }
                 });
                 const data = await response.json();

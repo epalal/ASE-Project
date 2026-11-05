@@ -9,11 +9,11 @@ servers:
   - url: http://localhost:5001
 
 paths:
-  /create_account:
+  /account:
     post:
       summary: Create a new user account
       description: This endpoint allows the creation of a new user account.
-      operationId: createAccount
+      operationId: Account
       requestBody:
         required: true
         content:

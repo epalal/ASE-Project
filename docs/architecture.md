@@ -83,7 +83,7 @@ If Player called Monster at registration and Monster ever called Player, the two
 
 ### 6. Only the Player Service can create tokens
 
-The Player Service signs JWTs with a private key that only it holds. The other services verify tokens with the matching public key, which cannot create tokens. Tokens last about 15 minutes and carry the player ID in `sub`, plus `exp`, `iat`, `iss` and `aud`.
+The Player Service signs JWTs with a private key that only it holds (for example RS256). The other services verify tokens with the matching public key, which cannot create tokens. Tokens last about 15 minutes and carry the player ID in `sub`, plus `exp`, `iat`, `iss` and `aud`.
 
 With a shared secret, any compromised service could forge a token for any player. Signing with a private key also follows the OAuth2/JWT requirement in §6.
 
@@ -95,7 +95,7 @@ All of these are explicit requirements in §6. Encrypting traffic inside Docker 
 
 ### 8. The gateway is a Flask application
 
-The gateway follows the pattern from Labs 5 and 6: a Flask app that forwards requests and returns 502 or 504 when a service fails or times out. Slide 9 showed an NGINX logo, and the diagram above replaces it.
+The gateway follows the pattern from Labs 5 and 6: a Flask app that forwards requests and returns 502 or 504 when a service fails or times out. Issue #11 said Nginx and slide 9 showed the Nginx logo. The gateway on `main` is already a Flask app, so only the slide changes, and the diagram above replaces it.
 
 ## Database design
 

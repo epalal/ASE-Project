@@ -21,12 +21,28 @@ class OwnedMonster:
     hp: int
 
 
+@dataclass(frozen=True)
+class Species:
+    """A catalogue monster with its base stats, as returned by C3."""
+
+    id: int
+    name: str
+    type: str
+    atk: int
+    hp: int
+
+
 class MonsterServiceUnavailable(Exception):
     """The Monster Service could not be reached or did not answer in time."""
 
 
 class MonsterClient(Protocol):
+    """Both calls raise MonsterServiceUnavailable if the service cannot be reached."""
+
     def get_player_monsters(self, player_id: str) -> list[OwnedMonster]:
-        """C9: GET /internal/players/{id}/monsters.
-        Raises MonsterServiceUnavailable if the service cannot be reached."""
+        """C9: GET /internal/players/{id}/monsters."""
+        ...
+
+    def get_species(self, species_id: int) -> Species:
+        """C3: GET /monsters/{id}, the catalogue entry with base stats."""
         ...

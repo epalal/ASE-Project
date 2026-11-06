@@ -25,7 +25,8 @@ def _monster_ids_from(body):
     return monster_ids
 
 
-def _team_of(player_id):
+def saved_team(player_id):
+    """The owned monster IDs of the player's team, in slot order."""
     rows = TeamMember.query.filter_by(player_id=player_id).order_by(TeamMember.slot).all()
     return [row.owned_monster_id for row in rows]
 
@@ -33,7 +34,7 @@ def _team_of(player_id):
 @team_bp.get("/team")
 @require_player
 def get_team():
-    return jsonify(monster_ids=_team_of(g.player_id))
+    return jsonify(monster_ids=saved_team(g.player_id))
 
 
 @team_bp.put("/team")
@@ -61,4 +62,4 @@ def put_team():
         db.session.add(TeamMember(player_id=g.player_id, slot=slot, owned_monster_id=monster_id))
     db.session.commit()
 
-    return jsonify(monster_ids=_team_of(g.player_id))
+    return jsonify(monster_ids=saved_team(g.player_id))

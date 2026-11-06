@@ -28,9 +28,11 @@ def create_app(test_config=None, monster_client=None):
         return jsonify(status="ok", service="encounter_service")
 
     from .challenges import challenges_bp
+    from .encounters import encounters_bp
     from .team import team_bp
 
     app.register_blueprint(team_bp)
     app.register_blueprint(challenges_bp)
+    app.register_blueprint(encounters_bp)
 
     return app

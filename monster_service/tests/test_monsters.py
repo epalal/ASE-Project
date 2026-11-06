@@ -13,7 +13,6 @@ PRIVATE_PEM = _private_key.private_bytes(
     format=serialization.PrivateFormat.PKCS8,
     encryption_algorithm=serialization.NoEncryption()
 ).decode("utf-8")
-
 PUBLIC_PEM = _private_key.public_key().public_bytes(
     encoding=serialization.Encoding.PEM,
     format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -149,6 +148,11 @@ def test_team_rejects_invalid_rules(client):
 def test_team_requires_authentication(client):
     assert client.get("/team").status_code == 401
     assert client.put("/team", json={"owned_monster_ids": [1, 2, 3]}).status_code == 401
+
+# TEST Internal endpoints require the shared service secret
+def test_internal_team_requires_secret(client):
+    response = client.get("/internal/players/player_team/team")
+    assert response.status_code == 403
 
 # TEST C10: Capture reward from the Encounter service
 def test_grant_reward_valid_and_idempotent(client):

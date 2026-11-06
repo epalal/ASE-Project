@@ -1,0 +1,21 @@
+meta {
+  name: Get Player Collection
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{monsterUrl}}/collection
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{testToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.count: isNumber
+  res.body.player_id: isString
+}

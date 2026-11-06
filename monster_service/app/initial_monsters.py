@@ -21,7 +21,7 @@ INITIAL_MONSTERS = [
 
 STARTER_MONSTER_IDS = [1, 5, 9]
 
-def seed_catalog():
+def catalog():
     if MonsterCatalog.query.count() == 0:
         for m in INITIAL_MONSTERS:
             db.session.add(MonsterCatalog(**m))

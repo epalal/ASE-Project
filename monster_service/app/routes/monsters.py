@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, g
 from sqlalchemy.exc import IntegrityError
-from ..models import db, MonsterCatalog, PlayerMonster, TeamMember
+from ..models import db, MonsterCatalog, PlayerMonster
 from ..initial_monsters import STARTER_MONSTER_IDS
 from ..auth import require_jwt, require_internal_secret
 
@@ -61,14 +61,17 @@ def get_team():
     player_id = g.player_id
     get_starter_monsters(player_id)
     team_members = (
-        TeamMember.query
-        .filter_by(player_id=player_id)
-        .order_by(TeamMember.slot.asc())
+        PlayerMonster.query
+        .filter(
+            PlayerMonster.player_id == player_id,
+            PlayerMonster.team_slot.is_not(None),
+        )
+        .order_by(PlayerMonster.team_slot.asc())
         .all()
     )
     return jsonify({
         "player_id": player_id,
-        "team": [member.owned_monster.to_dict() for member in team_members],
+        "team": [monster.to_dict() for monster in team_members],
     }), 200
 
 # US-07: Save exactly three distinct owned monsters as the player's team
@@ -105,15 +108,12 @@ def update_team():
             "error": "All team monsters must belong to the authenticated player"
         }), 400
 
-    TeamMember.query.filter_by(player_id=player_id).delete(
-        synchronize_session=False
+    PlayerMonster.query.filter_by(player_id=player_id).update(
+        {"team_slot": None},
+        synchronize_session=False,
     )
     for slot, ownership_id in enumerate(owned_monster_ids, start=1):
-        db.session.add(TeamMember(
-            player_id=player_id,
-            player_monster_id=monsters_by_id[ownership_id].id,
-            slot=slot,
-        ))
+        monsters_by_id[ownership_id].team_slot = slot
     db.session.commit()
 
     return jsonify({
@@ -127,14 +127,17 @@ def update_team():
 def get_player_team(player_id):
     owned_monsters = get_starter_monsters(player_id)
     team_members = (
-        TeamMember.query
-        .filter_by(player_id=player_id)
-        .order_by(TeamMember.slot.asc())
+        PlayerMonster.query
+        .filter(
+            PlayerMonster.player_id == player_id,
+            PlayerMonster.team_slot.is_not(None),
+        )
+        .order_by(PlayerMonster.team_slot.asc())
         .all()
     )
     return jsonify({
         "player_id": player_id,
-        "team": [member.owned_monster.to_dict() for member in team_members],
+        "team": [monster.to_dict() for monster in team_members],
         "owned_species_ids": [monster.monster_id for monster in owned_monsters],
     }), 200
 

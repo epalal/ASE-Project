@@ -1,0 +1,28 @@
+meta {
+  name: Grant Reward
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{monsterUrl}}/internal/rewards
+  body: json
+  auth: none
+}
+
+headers {
+  X-Internal-Secret: {{internalSecret}}
+}
+
+body:json {
+  {
+    "player_id": "test_player_01",
+    "monster_id": 11,
+    "encounter_id": "enc_999"
+  }
+}
+
+assert {
+  res.status: in [200, 201]
+  res.body.reward.monster.id: eq 11
+}

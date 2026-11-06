@@ -1,12 +1,11 @@
 import os
 from flask import Flask, jsonify
 from .models import db
-from .initial_monsters import seed_catalog
+from .initial_monsters import catalog
 from .routes.monsters import monsters_bp
 
 def create_app(test_config=None):
     app = Flask(__name__)
-    
     db_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@monster_db:5432/monster_db")
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=db_url,
@@ -25,6 +24,6 @@ def create_app(test_config=None):
 
     with app.app_context():
         db.create_all()
-        seed_catalog()
+        catalog()
 
     return app

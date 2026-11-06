@@ -39,7 +39,7 @@ components:
           example: Emberbun
         element:
           type: string
-          enum: [Fire, Water, Darkness, Grass]
+          enum: [Fire, Water, Dark, Grass]
           example: Fire
         power:
           type: integer

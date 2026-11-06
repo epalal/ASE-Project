@@ -10,22 +10,6 @@ def test_reading_the_team_needs_a_login_token(client):
     assert response.get_json()["error"] == "unauthorized"
 
 
-@pytest.fixture
-def attacker_key():
-    """A private key that is not the Player Service's."""
-    return _other_private_key()
-
-
-def _other_private_key():
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    return key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
-    )
-
-
 def test_a_token_not_signed_by_the_player_service_is_refused(client, token_for, attacker_key):
     response = client.get("/team", headers=token_for("player-1", signing_key=attacker_key))
 
@@ -49,6 +33,23 @@ def test_a_token_without_an_expiry_is_refused(client, token_for):
 
 def test_a_token_without_a_player_id_is_refused(client, token_for):
     response = client.get("/team", headers=token_for(None))
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "unauthorized"
+
+
+@pytest.mark.parametrize(
+    "claims",
+    [
+        {"audience": "some-other-app"},
+        {"audience": None},
+        {"issuer": "someone-else"},
+        {"issuer": None},
+    ],
+    ids=["token for another app", "no audience", "issued by someone else", "no issuer"],
+)
+def test_a_token_not_made_by_the_player_service_for_this_game_is_refused(client, token_for, claims):
+    response = client.get("/team", headers=token_for("player-1", **claims))
 
     assert response.status_code == 401
     assert response.get_json()["error"] == "unauthorized"
@@ -142,7 +143,7 @@ def test_saving_a_team_while_the_monster_service_is_down_fails_cleanly(
     refused = client.put("/team", json={"monster_ids": ["m3", "m2", "m1"]}, headers=token_for("player-1"))
     team = client.get("/team", headers=token_for("player-1"))
 
-    assert refused.status_code == 503
+    assert refused.status_code == 502
     assert refused.get_json()["error"] == "monster_service_unavailable"
     assert team.get_json() == {"monster_ids": ["m1", "m2", "m3"]}
 

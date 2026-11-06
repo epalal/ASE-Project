@@ -1,4 +1,5 @@
-"""Encounters: POST /encounters opens one (US-18)."""
+"""Encounters: POST /encounters opens one (US-18), and
+POST /encounters/{id}/action plays it with attack, capture or escape (US-19, US-21, US-22)."""
 
 import uuid
 from dataclasses import asdict
@@ -10,12 +11,13 @@ from . import rules
 from .auth import require_player
 from .errors import error
 from .models import Challenge, Encounter, db
-from .monster_client import MonsterServiceUnavailable
+from .monster_client import MonsterServiceUnavailable, RewardRefused
 from .team import saved_team
 
 encounters_bp = Blueprint("encounters", __name__)
 
-MAX_ID = 2**31 - 1  # largest integer key the database stores
+MAX_DB_INTEGER = 2**31 - 1  # the largest integer the database column stores
+INVALID_ACTION = 'Send {"action": "attack"}, {"action": "capture"} or {"action": "escape"}.'
 
 
 def _challenge_id_from(body):
@@ -25,7 +27,7 @@ def _challenge_id_from(body):
     challenge_id = body.get("challenge_id")
     if isinstance(challenge_id, bool) or not isinstance(challenge_id, int):
         return None
-    if not 1 <= challenge_id <= MAX_ID:
+    if not 1 <= challenge_id <= MAX_DB_INTEGER:
         return None
     return challenge_id
 
@@ -37,7 +39,9 @@ def _action_from(body):
     return body["action"]
 
 
-INVALID_ACTION = 'Send {"action": "attack"}, {"action": "capture"} or {"action": "escape"}.'
+def _closing(action, outcome, at):
+    """The column values that close an encounter."""
+    return {"status": "closed", "action": action, "roll": outcome.roll, "result": outcome.result, "closed_at": at}
 
 
 def _as_json(encounter):
@@ -47,10 +51,7 @@ def _as_json(encounter):
         "challenge_id": encounter.challenge_id,
         "wild": encounter.wild_snapshot,
         "team": encounter.team_snapshot,
-        "team_power": encounter.team_power,
-        "challenge_power": encounter.challenge_power,
-        "p_win": encounter.p_win,
-        "p_capture": encounter.p_capture,
+        **asdict(encounter.chances),
         "action": encounter.action,
         "roll": encounter.roll,
         "result": encounter.result,
@@ -67,43 +68,33 @@ def open_encounter():
     challenge = db.session.get(Challenge, challenge_id)
     if challenge is None:
         return error("challenge_not_found", "There is no challenge with this ID.", 404)
-    monster_service = current_app.extensions["monster_client"]
+    monster_client = current_app.extensions["monster_client"]
 
     # Rewards that could not be delivered earlier go first, so this fight uses the new stats.
     for waiting in Encounter.query.filter_by(player_id=g.player_id, reward_status="pending").all():
         _grant_reward(waiting)
     db.session.commit()
 
-    try:
-        owned = {monster.id: monster for monster in monster_service.get_player_monsters(g.player_id)}
-        wild = monster_service.get_species(challenge.wild_species_id)
-    except MonsterServiceUnavailable:
-        return error(
-            "monster_service_unavailable",
-            "Your monsters cannot be checked right now. Try again in a moment.",
-            503,
-        )
+    owned = {monster.id: monster for monster in monster_client.get_player_monsters(g.player_id)}
+    wild = monster_client.get_species(challenge.wild_species_id)
     team_ids = saved_team(g.player_id)
     try:
         rules.check_team(team_ids, owned_ids=owned.keys())
     except rules.TeamRuleError:
         return error("no_team", "Save a valid team of three monsters you own first.", 409)
     team = [owned[monster_id] for monster_id in team_ids]
-    wild_owned = any(monster.species_id == wild.id for monster in owned.values())
 
     chances = rules.compute_chances(
         [rules.Monster(m.type, m.atk, m.hp) for m in team],
         rules.Monster(wild.type, wild.atk, wild.hp),
-        wild_owned=wild_owned,
+        wild_owned=any(monster.species_id == wild.id for monster in owned.values()),
     )
 
     now = datetime.now(timezone.utc)
-    previous = Encounter.query.filter_by(player_id=g.player_id, status="open").first()
-    if previous is not None:  # one open encounter per player: the old one counts as an escape
-        previous.status, previous.action, previous.result = "closed", "escape", "escaped"
-        previous.closed_at = now
-        db.session.flush()  # close it before the new one is inserted
-
+    # One open encounter per player: an encounter still open counts as an escape.
+    Encounter.query.filter_by(player_id=g.player_id, status="open").update(
+        _closing("escape", rules.ESCAPED, at=now), synchronize_session=False
+    )
     encounter = Encounter(
         id=str(uuid.uuid4()),
         player_id=g.player_id,
@@ -111,10 +102,7 @@ def open_encounter():
         status="open",
         team_snapshot=[asdict(monster) for monster in team],
         wild_snapshot={"species_id": wild.id, "name": wild.name, "type": wild.type, "atk": wild.atk, "hp": wild.hp},
-        team_power=chances.team_power,
-        challenge_power=chances.challenge_power,
-        p_win=chances.p_win,
-        p_capture=chances.p_capture,
+        **asdict(chances),
         reward_status="none",
         created_at=now,
     )
@@ -136,49 +124,58 @@ def choose_action(encounter_id):
     if encounter.status == "closed":
         return error("encounter_closed", "This encounter is already over.", 409)
 
-    chances = rules.Chances(
-        team_power=encounter.team_power,
-        challenge_power=encounter.challenge_power,
-        p_win=encounter.p_win,
-        p_capture=encounter.p_capture,
-    )
     try:
-        outcome = rules.resolve(action, chances, draw=current_app.extensions["draw"])
+        outcome = rules.resolve(action, encounter.chances, draw=current_app.extensions["draw"])
     except rules.CaptureNotOffered:
         return error("capture_not_offered", "You already own this monster, so you cannot capture it.", 409)
     except rules.UnknownAction:
         return error("invalid_input", INVALID_ACTION, 400)
 
-    encounter.status, encounter.action = "closed", action
-    encounter.roll, encounter.result = outcome.roll, outcome.result
-    encounter.closed_at = datetime.now(timezone.utc)
-
-    if outcome.result in ("win", "captured"):
-        _grant_reward(encounter)
+    # Claim the encounter in one atomic update that only succeeds while it is still
+    # open, and save it before calling the Monster Service. A second request that
+    # arrives meanwhile finds nothing to claim, so it can never be rewarded too.
+    rewarded = outcome.result in rules.REWARDED_RESULTS
+    claimed = Encounter.query.filter_by(id=encounter.id, status="open").update(
+        {
+            **_closing(action, outcome, at=datetime.now(timezone.utc)),
+            "reward_status": "pending" if rewarded else "none",
+        },
+        synchronize_session=False,
+    )
     db.session.commit()
+    if not claimed:
+        return error("encounter_closed", "This encounter is already over.", 409)
+
+    if rewarded:
+        _grant_reward(encounter)
+        db.session.commit()
 
     return jsonify(_as_json(encounter))
 
 
 def _grant_reward(encounter):
-    """Ask the Monster Service for the reward (C10). If it cannot be reached,
-    the result still counts and the reward stays pending, to be retried later;
-    retrying is safe because the Monster Service rewards each encounter once."""
-    monster_service = current_app.extensions["monster_client"]
+    """Ask the Monster Service for the reward (C10). If it cannot be reached, the
+    result still counts and the reward stays pending, to be retried before the next
+    encounter; retrying is safe because the Monster Service rewards each encounter
+    once. If it refuses, the reward is marked failed and not retried."""
+    monster_client = current_app.extensions["monster_client"]
     try:
         if encounter.result == "win":
-            monster_service.grant_stats(
+            monster_client.grant_stats(
                 encounter.id,
                 encounter.player_id,
-                [monster["id"] for monster in encounter.team_snapshot],
+                encounter.team_monster_ids,
                 rules.WIN_ATK_BONUS,
                 rules.WIN_HP_BONUS,
             )
+        elif encounter.result == "captured":
+            monster_client.grant_capture(encounter.id, encounter.player_id, encounter.wild_species_id)
         else:
-            monster_service.grant_capture(
-                encounter.id, encounter.player_id, encounter.wild_snapshot["species_id"]
-            )
+            return
     except MonsterServiceUnavailable:
         encounter.reward_status = "pending"
+        return
+    except RewardRefused:
+        encounter.reward_status = "failed"
         return
     encounter.reward_status = "applied"

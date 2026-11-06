@@ -3,6 +3,7 @@ import secrets
 
 from flask import Flask, jsonify
 
+from .errors import register_error_handlers
 from .models import db
 
 
@@ -13,12 +14,16 @@ def create_app(test_config=None, monster_client=None, draw=None):
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL"),
         JWT_PUBLIC_KEY=os.environ.get("JWT_PUBLIC_KEY", "").replace("\\n", "\n"),
+        # Design rule 6: tokens are issued by the Player Service for this game.
+        JWT_ISSUER=os.environ.get("JWT_ISSUER", "player-service"),
+        JWT_AUDIENCE=os.environ.get("JWT_AUDIENCE", "monster-tamers"),
     )
     if test_config:
         app.config.update(test_config)
 
     app.extensions["monster_client"] = monster_client
     app.extensions["draw"] = draw or secrets.SystemRandom().random
+    register_error_handlers(app)
 
     from .challenges import load_challenges
 

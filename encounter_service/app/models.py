@@ -2,6 +2,8 @@
 
 from flask_sqlalchemy import SQLAlchemy
 
+from . import rules
+
 db = SQLAlchemy()
 
 
@@ -56,8 +58,35 @@ class Encounter(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False)
     closed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    @property
+    def chances(self):
+        return rules.Chances(
+            team_power=self.team_power,
+            challenge_power=self.challenge_power,
+            p_win=self.p_win,
+            p_capture=self.p_capture,
+        )
+
+    @property
+    def team_monster_ids(self):
+        return [monster["id"] for monster in self.team_snapshot]
+
+    @property
+    def wild_species_id(self):
+        return self.wild_snapshot["species_id"]
+
     __table_args__ = (
         db.CheckConstraint("status IN ('open', 'closed')", name="encounter_status"),
+        db.CheckConstraint(
+            "action IS NULL OR action IN ('attack', 'capture', 'escape')", name="encounter_action"
+        ),
+        db.CheckConstraint(
+            "result IS NULL OR result IN ('win', 'loss', 'captured', 'failed', 'escaped')",
+            name="encounter_result",
+        ),
+        db.CheckConstraint(
+            "reward_status IN ('none', 'pending', 'applied', 'failed')", name="encounter_reward_status"
+        ),
         # The database itself allows only one open encounter per player.
         db.Index(
             "one_open_encounter_per_player",

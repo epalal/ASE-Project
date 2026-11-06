@@ -20,9 +20,11 @@ def require_player(view):
                 header.removeprefix("Bearer "),
                 current_app.config["JWT_PUBLIC_KEY"],
                 algorithms=["RS256"],
-                options={"require": ["exp", "sub"]},
+                audience=current_app.config["JWT_AUDIENCE"],
+                issuer=current_app.config["JWT_ISSUER"],
+                options={"require": ["exp", "sub", "aud", "iss"]},
             )
-        except jwt.InvalidTokenError:  # forged, expired, malformed or missing a claim
+        except jwt.InvalidTokenError:  # forged, expired, malformed, wrong audience/issuer, or missing a claim
             return error("unauthorized", "A valid login token is required.", 401)
         g.player_id = claims["sub"]
         return view(*args, **kwargs)

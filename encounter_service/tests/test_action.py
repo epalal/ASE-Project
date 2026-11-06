@@ -209,6 +209,19 @@ def test_a_pending_reward_is_given_before_the_next_encounter_opens(game, dice, m
     ]
 
 
+def test_a_reward_the_monster_service_refuses_is_marked_failed_and_never_retried(game, dice, monster_service):
+    game.give_team("player-1", EXAMPLE_TEAM)
+    encounter = game.open("player-1", EXAMPLE_WILD).get_json()
+    monster_service.refuse_rewards()
+    dice.next_roll = 0.10
+
+    outcome = game.act("player-1", encounter["id"], "attack").get_json()
+    game.open("player-1", BUDBUG)  # opening again retries pending rewards only
+
+    assert (outcome["result"], outcome["reward_status"]) == ("win", "failed")
+    assert len(monster_service.refused_rewards) == 1  # asked once, not again
+
+
 def test_choosing_an_action_needs_a_login_token(client):
     response = client.post("/encounters/any-encounter/action", json={"action": "attack"})
 

@@ -45,7 +45,7 @@ Only the gateway is published to the host. The three services and the three data
 | API Gateway | Routing of public URLs to services | Player, Monster, Encounter |
 | Player Service | Accounts and credentials; signs JWTs | Nobody |
 | Monster Service | Monster catalogue, owned monsters with their own ATK/HP, applied rewards | Nobody |
-| Encounter Service | Current team, challenges, encounter resolution, encounter history | Monster (`/internal` only) |
+| Encounter Service | Current team, challenges, encounter resolution, encounter history | Monster (its `/internal` calls, plus the public catalogue `GET /monsters/{id}` for a wild monster's base stats) |
 
 Calls go one way. The Encounter Service is the only service that calls another one, and it only calls the Monster Service.
 
@@ -73,7 +73,9 @@ Calls between services use paths under `/internal/`. The gateway never routes `/
 
 The client only chooses a challenge and then an action. The Encounter Service reads the player's team from its own database and the monsters' current stats from the Monster Service, computes the chances, rolls on the server and stores the result. After a win or a capture it asks the Monster Service to apply the reward and sends the encounter ID. The Monster Service records each encounter ID and refuses a second reward for the same one.
 
-So the client can never submit an outcome, and a double click or a retry cannot reward twice. If the reward call fails, the encounter keeps `reward_status = pending` and the reward can be retried. The requirements ask us to document how contingencies like this are handled.
+So the client can never submit an outcome, and a double click or a retry cannot reward twice. Before asking for the reward, the Encounter Service closes the encounter with one update that only succeeds while it is still open, and saves it. A second request for the same encounter, even one that arrives at the same instant, finds it closed and gets 409.
+
+If the Monster Service cannot be reached, the result still counts and the encounter keeps `reward_status = pending`; the reward is sent again before the player's next encounter, so that fight already uses the new stats. If the Monster Service refuses the reward, it is marked `failed` and not retried, because asking again would get the same answer. The requirements ask us to document how contingencies like these are handled.
 
 ### 5. No circular calls
 
@@ -83,7 +85,7 @@ If Player called Monster at registration and Monster ever called Player, the two
 
 ### 6. Only the Player Service can create tokens
 
-The Player Service signs JWTs with a private key that only it holds (for example RS256). The other services verify tokens with the matching public key, which cannot create tokens. Tokens last about 15 minutes and carry the player ID in `sub`, plus `exp`, `iat`, `iss` and `aud`.
+The Player Service signs JWTs with a private key that only it holds (for example RS256). The other services verify tokens with the matching public key, which cannot create tokens. Tokens last about 15 minutes and carry the player ID in `sub`, plus `exp`, `iat`, `iss` and `aud`. The issuer is `player-service` and the audience is `monster-tamers`; every service refuses a token without them or with any other value.
 
 With a shared secret, any compromised service could forge a token for any player. Signing with a private key also follows the OAuth2/JWT requirement in §6.
 
@@ -191,7 +193,7 @@ The team lives here because it only exists to prepare encounters (US-14: "so tha
 | `action` | `attack`, `capture` or `escape`; empty while open | What the player chose (US-21, US-22) |
 | `roll` | nullable | The random number; empty while open and for an escape |
 | `result` | `win`, `loss`, `captured`, `failed` or `escaped`; empty while open | |
-| `reward_status` | `none`, `pending`, `applied` or `failed` | Shows a reward that still needs to be retried |
+| `reward_status` | `none`, `pending`, `applied` or `failed` | `pending`: not delivered yet, sent again before the player's next encounter. `failed`: the Monster Service refused it |
 | `created_at`, `closed_at` | timestamp | |
 
 ### Rules for all databases
@@ -255,7 +257,7 @@ Allowing one open encounter per player needs no timers or cleanup jobs. Because 
 | Contract | Call | Change |
 |---|---|---|
 | C5 | `GET /team`, `PUT /team` | Move from the Monster Service to the Encounter Service, built by Hatem. `PUT /team` takes three owned monster IDs and returns 400 if the team breaks a rule |
-| C7 | `POST /encounters` with `{"challenge_id": ...}` | Opens the encounter and returns its ID, the wild monster, the team, `p_win` and `p_capture` (`null` when capture is not offered). It no longer returns the result. Returns 409 if the player has no valid team |
+| C7 | `POST /encounters` with `{"challenge_id": ...}` | Opens the encounter and returns its ID, the wild monster, the team, `p_win` and `p_capture` (`null` when capture is not offered). It no longer returns the result. Returns 409 if the player has no valid team, 502 if the Monster Service is down or answers with an error, and 504 if it does not answer within 3 seconds |
 | C7 | `POST /encounters/{id}/action` with `{"action": "attack"}`, `"capture"` or `"escape"` | Resolves the encounter and returns the result. Returns 409 if the encounter is already closed or capture is not offered, and 404 if the encounter belongs to another player |
 | C9 | `GET /internal/players/{id}/monsters` | Replaces `GET /internal/players/{id}/team`. Returns the player's owned monsters with their species, type and current ATK and HP. The Encounter Service uses it to check a team when it is saved, to read the stats when an encounter opens, and to decide whether to offer capture |
 | C10 | `POST /internal/rewards` | Two kinds of reward: stats (`owned_monster_ids` from the snapshot, `atk_bonus`, `hp_bonus`) or capture (`captured_species_id`). The Monster Service applies the +3 limit, because it owns the stats |
@@ -275,6 +277,9 @@ Allowing one open encounter per player needs no timers or cleanup jobs. Because 
 | Reward for an attack win | +1 ATK and +1 HP for each team monster, up to the base value + 3 |
 | Reward for a loss or a failed capture | Nothing |
 | Open encounters | At most one per player; opening a new one closes the old one as escaped |
+| When the Monster Service fails | 502 if it is down or answers with an error, 504 if it does not answer within 3 seconds, as in Lab 6 |
+| Error format | Every error, including 404, 405 and crashes, is `{"error": "code", "message": "text"}` (issue #21) |
+| Token issuer and audience | `iss` is `player-service`, `aud` is `monster-tamers` |
 | Opening an encounter without a valid team | Refused with 409 |
 | Database separation | One PostgreSQL container, login and volume per service |
 | Who builds each database | The owner of the service: player-db Elisa, monster-db Elena, encounter-db Hatem |

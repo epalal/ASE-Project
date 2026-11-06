@@ -33,7 +33,16 @@ class Species:
 
 
 class MonsterServiceUnavailable(Exception):
-    """The Monster Service could not be reached or did not answer in time."""
+    """The Monster Service could not be reached or answered with an error."""
+
+
+class MonsterServiceTimeout(MonsterServiceUnavailable):
+    """The Monster Service did not answer in time."""
+
+
+class RewardRefused(Exception):
+    """The Monster Service answered and said no to a reward (for example, the
+    player already owns the species). Retrying would not change the answer."""
 
 
 class MonsterClient(Protocol):

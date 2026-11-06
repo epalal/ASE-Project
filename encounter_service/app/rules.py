@@ -21,6 +21,9 @@ CAPTURE_FACTOR = 0.75
 WIN_ATK_BONUS = 1
 WIN_HP_BONUS = 1
 
+# The results that earn a reward: a win raises the team's stats, a capture adds the monster.
+REWARDED_RESULTS = ("win", "captured")
+
 
 @dataclass(frozen=True)
 class Monster:
@@ -41,6 +44,9 @@ class Chances:
 class Outcome:
     result: str  # win, loss, captured, failed or escaped
     roll: float | None  # None for an escape, which never rolls
+
+
+ESCAPED = Outcome(result="escaped", roll=None)
 
 
 class UnknownAction(ValueError):
@@ -98,7 +104,7 @@ def resolve(action: str, chances: Chances, draw: Callable[[], float]) -> Outcome
     """Resolve one action. `draw` returns a random number in [0, 1); it is only
     called when the action needs a roll, so an escape never rolls."""
     if action == "escape":
-        return Outcome(result="escaped", roll=None)
+        return ESCAPED
     if action == "attack":
         roll = draw()
         return Outcome(result="win" if roll < chances.p_win else "loss", roll=roll)

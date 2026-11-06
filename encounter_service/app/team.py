@@ -5,7 +5,6 @@ from flask import Blueprint, current_app, g, jsonify, request
 from .auth import require_player
 from .errors import error
 from .models import TeamMember, db
-from .monster_client import MonsterServiceUnavailable
 from .rules import TeamRuleError, check_team
 
 team_bp = Blueprint("team", __name__)
@@ -44,14 +43,7 @@ def put_team():
     if chosen is None:
         return error("invalid_input", 'Send {"monster_ids": [three monster IDs]}.', 400)
 
-    try:
-        monsters = current_app.extensions["monster_client"].get_player_monsters(g.player_id)
-    except MonsterServiceUnavailable:
-        return error(
-            "monster_service_unavailable",
-            "Your monsters cannot be checked right now. Try again in a moment.",
-            503,
-        )
+    monsters = current_app.extensions["monster_client"].get_player_monsters(g.player_id)
     try:
         check_team(chosen, owned_ids={monster.id for monster in monsters})
     except TeamRuleError as broken:

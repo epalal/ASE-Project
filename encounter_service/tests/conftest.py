@@ -6,7 +6,13 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app import create_app
-from app.monster_client import MonsterServiceUnavailable, OwnedMonster, Species
+from app.monster_client import (
+    MonsterServiceTimeout,
+    MonsterServiceUnavailable,
+    OwnedMonster,
+    RewardRefused,
+    Species,
+)
 
 # The roster slide: catalogue ID, name, type, base ATK, base HP.
 ROSTER = [
@@ -29,13 +35,42 @@ class FakeMonsterService:
         self._catalogue = {species.id: species for species in ROSTER}
         self._owned = {}
         self._down = False
+        self._slow = False
+        self._refusing = False
         self.rewards = []  # what C10 received, like the Lab 6 stub's /__calls
+        self.refused_rewards = []  # rewards it said no to
+        self.while_rewarding = None  # runs once, in the middle of a reward call
+
+    def refuse_rewards(self):
+        """Answer every reward with a refusal, as the real service does for example
+        when the player already owns the species."""
+        self._refusing = True
+
+    def _answer(self):
+        """Fail the way the real service would if it were down or too slow."""
+        if self._slow:
+            raise MonsterServiceTimeout()
+        if self._down:
+            raise MonsterServiceUnavailable()
+
+    def _reward_received(self, reward):
+        self._answer()
+        if self._refusing:
+            self.refused_rewards.append(reward)
+            raise RewardRefused()
+        interruption, self.while_rewarding = self.while_rewarding, None
+        if interruption:
+            interruption()
+        self.rewards.append(reward)
 
     def go_down(self):
         self._down = True
 
+    def go_slow(self):
+        self._slow = True
+
     def come_back(self):
-        self._down = False
+        self._down = self._slow = False
 
     def give(self, player_id, *monster_ids, species_id=1):
         """Give the player monsters of one species, with that species' base stats."""
@@ -57,19 +92,15 @@ class FakeMonsterService:
         self._owned[player_id] = [m for m in self._owned.get(player_id, []) if m.id != monster_id]
 
     def get_player_monsters(self, player_id):
-        if self._down:
-            raise MonsterServiceUnavailable()
+        self._answer()
         return list(self._owned.get(player_id, []))
 
     def get_species(self, species_id):
-        if self._down:
-            raise MonsterServiceUnavailable()
+        self._answer()
         return self._catalogue[species_id]
 
     def grant_stats(self, encounter_id, player_id, owned_monster_ids, atk_bonus, hp_bonus):
-        if self._down:
-            raise MonsterServiceUnavailable()
-        self.rewards.append(
+        self._reward_received(
             {
                 "kind": "stats",
                 "encounter_id": encounter_id,
@@ -81,9 +112,7 @@ class FakeMonsterService:
         )
 
     def grant_capture(self, encounter_id, player_id, species_id):
-        if self._down:
-            raise MonsterServiceUnavailable()
-        self.rewards.append(
+        self._reward_received(
             {"kind": "capture", "encounter_id": encounter_id, "player_id": player_id, "species_id": species_id}
         )
 
@@ -162,18 +191,36 @@ def player_service_keys():
     return _key_pair()
 
 
+@pytest.fixture(scope="session")
+def attacker_key():
+    """A private key that is not the Player Service's."""
+    private_pem, _ = _key_pair()
+    return private_pem
+
+
 @pytest.fixture
 def token_for(player_service_keys):
     """Authorization header for a player, signed like the Player Service will sign it."""
     private_pem, _ = player_service_keys
 
-    def make(player_id, signing_key=private_pem, expires_in=900):
+    def make(
+        player_id,
+        signing_key=private_pem,
+        expires_in=900,
+        audience="monster-tamers",
+        issuer="player-service",
+    ):
+        """A None argument leaves that claim out of the token."""
         now = dt.datetime.now(dt.timezone.utc)
         claims = {"iat": now}
         if player_id is not None:
             claims["sub"] = player_id
         if expires_in is not None:
             claims["exp"] = now + dt.timedelta(seconds=expires_in)
+        if audience is not None:
+            claims["aud"] = audience
+        if issuer is not None:
+            claims["iss"] = issuer
         token = jwt.encode(claims, signing_key, algorithm="RS256")
         return {"Authorization": f"Bearer {token}"}
 
@@ -181,12 +228,18 @@ def token_for(player_service_keys):
 
 
 @pytest.fixture
-def app(player_service_keys, monster_service, dice):
+def database_uri():
+    """An in-memory database by default; a test module can override this."""
+    return "sqlite://"
+
+
+@pytest.fixture
+def app(player_service_keys, monster_service, dice, database_uri):
     _, public_pem = player_service_keys
     return create_app(
         {
             "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_DATABASE_URI": database_uri,
             "JWT_PUBLIC_KEY": public_pem,
         },
         monster_client=monster_service,

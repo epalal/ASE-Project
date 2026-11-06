@@ -145,15 +145,14 @@ There is no session or token table, because a JWT carries its own expiry. We sto
 | `acquired_at` | timestamp | Record keeping |
 | | unique (`player_id`, `species_id`) | No duplicates: a player owns at most one of each species |
 
-`applied_reward`: rewards already given
+`applied_reward`: the encounters already rewarded
 
 | Column | Rule | Why |
 |---|---|---|
-| `encounter_id` | UUID, primary key | A second reward for the same encounter is rejected (rule 4) |
-| `player_id` | UUID, not null | Who received it |
-| `atk_bonus`, `hp_bonus` | integer | The stat increase from an attack win; 0 for a capture |
-| `captured_species_id` | nullable | The monster captured, if the action was a capture |
+| `encounter_id` | UUID, primary key | A second reward for the same encounter is rejected (rule 4), for stats rewards and captures alike |
 | `applied_at` | timestamp | Record keeping |
+
+The details of each reward (the stats added, the monster captured) are already in the Encounter Service's `encounter` table, so this table only keeps the encounter ID. It still has to exist, because the Monster Service cannot read encounter-db and is the only one that knows whether it already applied a reward. If the Monster Service raises the stats but its answer is lost on the way back, the Encounter Service sees a timeout and sends the reward again; this table is what stops the stats from going up twice. Tancredi suggested dropping the reward details here.
 
 ### encounter-db (Encounter Service)
 

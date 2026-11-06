@@ -50,7 +50,9 @@ class Encounter(db.Model):
     p_win = db.Column(db.Float, nullable=False)
     p_capture = db.Column(db.Float, nullable=True)  # empty when capture is not offered
     action = db.Column(db.String(8), nullable=True)  # attack, capture or escape; empty while open
+    roll = db.Column(db.Float, nullable=True)  # empty while open and for an escape
     result = db.Column(db.String(8), nullable=True)  # win, loss, captured, failed or escaped
+    reward_status = db.Column(db.String(8), nullable=False, default="none")  # none, pending, applied, failed
     created_at = db.Column(db.DateTime(timezone=True), nullable=False)
     closed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 

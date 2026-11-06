@@ -16,6 +16,11 @@ TEAM_SIZE = 3
 LOGISTIC_FACTOR = 0.6
 CAPTURE_FACTOR = 0.75
 
+# An attack win gives each team monster +1 ATK and +1 HP. The Monster Service
+# owns the stats, so it applies the "base value + 3" limit.
+WIN_ATK_BONUS = 1
+WIN_HP_BONUS = 1
+
 
 @dataclass(frozen=True)
 class Monster:

@@ -29,9 +29,13 @@ class FakeMonsterService:
         self._catalogue = {species.id: species for species in ROSTER}
         self._owned = {}
         self._down = False
+        self.rewards = []  # what C10 received, like the Lab 6 stub's /__calls
 
     def go_down(self):
         self._down = True
+
+    def come_back(self):
+        self._down = False
 
     def give(self, player_id, *monster_ids, species_id=1):
         """Give the player monsters of one species, with that species' base stats."""
@@ -62,10 +66,81 @@ class FakeMonsterService:
             raise MonsterServiceUnavailable()
         return self._catalogue[species_id]
 
+    def grant_stats(self, encounter_id, player_id, owned_monster_ids, atk_bonus, hp_bonus):
+        if self._down:
+            raise MonsterServiceUnavailable()
+        self.rewards.append(
+            {
+                "kind": "stats",
+                "encounter_id": encounter_id,
+                "player_id": player_id,
+                "owned_monster_ids": list(owned_monster_ids),
+                "atk_bonus": atk_bonus,
+                "hp_bonus": hp_bonus,
+            }
+        )
+
+    def grant_capture(self, encounter_id, player_id, species_id):
+        if self._down:
+            raise MonsterServiceUnavailable()
+        self.rewards.append(
+            {"kind": "capture", "encounter_id": encounter_id, "player_id": player_id, "species_id": species_id}
+        )
+
 
 @pytest.fixture
 def monster_service():
     return FakeMonsterService()
+
+
+class Dice:
+    """Stands in for the secure random generator: the test decides the roll."""
+
+    def __init__(self):
+        self.next_roll = 0.5
+
+    def roll(self):
+        return self.next_roll
+
+
+@pytest.fixture
+def dice():
+    return Dice()
+
+
+class Game:
+    """Small helpers so the tests read like the game."""
+
+    def __init__(self, client, token_for, monster_service):
+        self._client = client
+        self._token_for = token_for
+        self._monster_service = monster_service
+
+    def give_team(self, player_id, species_ids):
+        """Give the player one monster of each species, save them as the team,
+        and return their IDs in slot order."""
+        monster_ids = []
+        for species_id in species_ids:
+            monster_id = f"{player_id}-monster-{species_id}"
+            self._monster_service.give(player_id, monster_id, species_id=species_id)
+            monster_ids.append(monster_id)
+        self._client.put("/team", json={"monster_ids": monster_ids}, headers=self._token_for(player_id))
+        return monster_ids
+
+    def open(self, player_id, challenge_id):
+        return self._client.post(
+            "/encounters", json={"challenge_id": challenge_id}, headers=self._token_for(player_id)
+        )
+
+    def act(self, player_id, encounter_id, action):
+        return self._client.post(
+            f"/encounters/{encounter_id}/action", json={"action": action}, headers=self._token_for(player_id)
+        )
+
+
+@pytest.fixture
+def game(client, token_for, monster_service):
+    return Game(client, token_for, monster_service)
 
 
 def _key_pair():
@@ -106,7 +181,7 @@ def token_for(player_service_keys):
 
 
 @pytest.fixture
-def app(player_service_keys, monster_service):
+def app(player_service_keys, monster_service, dice):
     _, public_pem = player_service_keys
     return create_app(
         {
@@ -115,6 +190,7 @@ def app(player_service_keys, monster_service):
             "JWT_PUBLIC_KEY": public_pem,
         },
         monster_client=monster_service,
+        draw=dice.roll,
     )
 
 

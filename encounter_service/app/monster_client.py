@@ -37,7 +37,10 @@ class MonsterServiceUnavailable(Exception):
 
 
 class MonsterClient(Protocol):
-    """Both calls raise MonsterServiceUnavailable if the service cannot be reached."""
+    """Every call raises MonsterServiceUnavailable if the service cannot be reached.
+
+    The two reward calls are C10, POST /internal/rewards. The Monster Service
+    refuses a second reward for the same encounter ID, so retrying is safe."""
 
     def get_player_monsters(self, player_id: str) -> list[OwnedMonster]:
         """C9: GET /internal/players/{id}/monsters."""
@@ -45,4 +48,14 @@ class MonsterClient(Protocol):
 
     def get_species(self, species_id: int) -> Species:
         """C3: GET /monsters/{id}, the catalogue entry with base stats."""
+        ...
+
+    def grant_stats(
+        self, encounter_id: str, player_id: str, owned_monster_ids: list[str], atk_bonus: int, hp_bonus: int
+    ) -> None:
+        """Reward for an attack win: raise these monsters' stats."""
+        ...
+
+    def grant_capture(self, encounter_id: str, player_id: str, species_id: int) -> None:
+        """Reward for a capture: add this species to the player's collection."""
         ...

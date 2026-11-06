@@ -1,11 +1,14 @@
 import os
+import secrets
 
 from flask import Flask, jsonify
 
 from .models import db
 
 
-def create_app(test_config=None, monster_client=None):
+def create_app(test_config=None, monster_client=None, draw=None):
+    """`draw` returns a random number in [0, 1). Production uses the operating
+    system's secure generator, so nobody can predict a roll; tests pass a fixed die."""
     app = Flask(__name__)
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL"),
@@ -15,6 +18,7 @@ def create_app(test_config=None, monster_client=None):
         app.config.update(test_config)
 
     app.extensions["monster_client"] = monster_client
+    app.extensions["draw"] = draw or secrets.SystemRandom().random
 
     from .challenges import load_challenges
 

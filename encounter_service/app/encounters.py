@@ -30,6 +30,16 @@ def _challenge_id_from(body):
     return challenge_id
 
 
+def _action_from(body):
+    """Accept only {"action": <text>}; which actions exist is up to the rules."""
+    if not isinstance(body, dict) or not isinstance(body.get("action"), str):
+        return None
+    return body["action"]
+
+
+INVALID_ACTION = 'Send {"action": "attack"}, {"action": "capture"} or {"action": "escape"}.'
+
+
 def _as_json(encounter):
     return {
         "id": encounter.id,
@@ -41,6 +51,10 @@ def _as_json(encounter):
         "challenge_power": encounter.challenge_power,
         "p_win": encounter.p_win,
         "p_capture": encounter.p_capture,
+        "action": encounter.action,
+        "roll": encounter.roll,
+        "result": encounter.result,
+        "reward_status": encounter.reward_status,
     }
 
 
@@ -54,6 +68,11 @@ def open_encounter():
     if challenge is None:
         return error("challenge_not_found", "There is no challenge with this ID.", 404)
     monster_service = current_app.extensions["monster_client"]
+
+    # Rewards that could not be delivered earlier go first, so this fight uses the new stats.
+    for waiting in Encounter.query.filter_by(player_id=g.player_id, reward_status="pending").all():
+        _grant_reward(waiting)
+    db.session.commit()
 
     try:
         owned = {monster.id: monster for monster in monster_service.get_player_monsters(g.player_id)}
@@ -96,9 +115,70 @@ def open_encounter():
         challenge_power=chances.challenge_power,
         p_win=chances.p_win,
         p_capture=chances.p_capture,
+        reward_status="none",
         created_at=now,
     )
     db.session.add(encounter)
     db.session.commit()
 
     return jsonify(_as_json(encounter)), 201
+
+
+@encounters_bp.post("/encounters/<encounter_id>/action")
+@require_player
+def choose_action(encounter_id):
+    action = _action_from(request.get_json(silent=True))
+    if action is None:
+        return error("invalid_input", INVALID_ACTION, 400)
+    encounter = db.session.get(Encounter, encounter_id)
+    if encounter is None or encounter.player_id != g.player_id:  # 404 even if it exists: no hint for attackers
+        return error("encounter_not_found", "There is no encounter with this ID.", 404)
+    if encounter.status == "closed":
+        return error("encounter_closed", "This encounter is already over.", 409)
+
+    chances = rules.Chances(
+        team_power=encounter.team_power,
+        challenge_power=encounter.challenge_power,
+        p_win=encounter.p_win,
+        p_capture=encounter.p_capture,
+    )
+    try:
+        outcome = rules.resolve(action, chances, draw=current_app.extensions["draw"])
+    except rules.CaptureNotOffered:
+        return error("capture_not_offered", "You already own this monster, so you cannot capture it.", 409)
+    except rules.UnknownAction:
+        return error("invalid_input", INVALID_ACTION, 400)
+
+    encounter.status, encounter.action = "closed", action
+    encounter.roll, encounter.result = outcome.roll, outcome.result
+    encounter.closed_at = datetime.now(timezone.utc)
+
+    if outcome.result in ("win", "captured"):
+        _grant_reward(encounter)
+    db.session.commit()
+
+    return jsonify(_as_json(encounter))
+
+
+def _grant_reward(encounter):
+    """Ask the Monster Service for the reward (C10). If it cannot be reached,
+    the result still counts and the reward stays pending, to be retried later;
+    retrying is safe because the Monster Service rewards each encounter once."""
+    monster_service = current_app.extensions["monster_client"]
+    try:
+        if encounter.result == "win":
+            monster_service.grant_stats(
+                encounter.id,
+                encounter.player_id,
+                [monster["id"] for monster in encounter.team_snapshot],
+                rules.WIN_ATK_BONUS,
+                rules.WIN_HP_BONUS,
+            )
+        else:
+            monster_service.grant_capture(
+                encounter.id, encounter.player_id, encounter.wild_snapshot["species_id"]
+            )
+    except MonsterServiceUnavailable:
+        encounter.reward_status = "pending"
+        return
+    encounter.reward_status = "applied"

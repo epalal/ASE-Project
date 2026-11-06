@@ -1,0 +1,17 @@
+meta {
+  name: Get Catalog
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{monsterUrl}}/monsters
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.length: eq 16
+  res.body[0].element: isString
+}

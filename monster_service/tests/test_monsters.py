@@ -97,6 +97,59 @@ def test_get_collection_unauthorized_invalid(client):
     res_bad_token = client.get("/collection", headers={"Authorization": "Bearer invalid.jwt.token"})
     assert res_bad_token.status_code == 401
 
+# TEST US-07: Read and save a team of three owned monsters
+def test_team_can_be_saved_and_read(client):
+    token = make_token("team_player")
+    auth_headers = {"Authorization": f"Bearer {token}"}
+
+    collection = client.get("/collection", headers=auth_headers).get_json()["collection"]
+    owned_ids = [monster["ownership_id"] for monster in collection]
+
+    save_res = client.put("/team", json={"owned_monster_ids": owned_ids}, headers=auth_headers)
+    assert save_res.status_code == 200
+    assert [monster["ownership_id"] for monster in save_res.get_json()["team"]] == owned_ids
+
+    read_res = client.get("/team", headers=auth_headers)
+    assert read_res.status_code == 200
+    team = read_res.get_json()["team"]
+    assert [monster["ownership_id"] for monster in team] == owned_ids
+    assert [monster["atk"] for monster in team] == [2, 2, 3]
+    assert [monster["hp"] for monster in team] == [2, 3, 2]
+
+    internal_res = client.get(
+        "/internal/players/team_player/team",
+        headers={"X-Internal-Secret": INTERNAL_SECRET},
+    )
+    assert internal_res.status_code == 200
+    assert [monster["ownership_id"] for monster in internal_res.get_json()["team"]] == owned_ids
+    assert [monster["atk"] for monster in internal_res.get_json()["team"]] == [2, 2, 3]
+
+# TEST Invalid team rules (not exactly 3 monsters, duplicates, or unowned monsters)
+def test_team_rejects_invalid_rules(client):
+    token = make_token("team_validation_player")
+    auth_headers = {"Authorization": f"Bearer {token}"}
+    collection = client.get("/collection", headers=auth_headers).get_json()["collection"]
+    owned_ids = [monster["ownership_id"] for monster in collection]
+
+    invalid_teams = (
+        [owned_ids[0]],
+        owned_ids[:2],
+        owned_ids + [owned_ids[0]],
+        [999, 1000, 1001],
+    )
+    for invalid_ids in invalid_teams:
+        response = client.put(
+            "/team",
+            json={"owned_monster_ids": invalid_ids},
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+
+# TEST Team endpoints require authentication
+def test_team_requires_authentication(client):
+    assert client.get("/team").status_code == 401
+    assert client.put("/team", json={"owned_monster_ids": [1, 2, 3]}).status_code == 401
+
 # TEST C10: Capture reward from the Encounter service
 def test_grant_reward_valid_and_idempotent(client):
     """Test 2xx: Grant a reward for a valid monster and ensure idempotency."""

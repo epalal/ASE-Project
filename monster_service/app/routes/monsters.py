@@ -54,6 +54,73 @@ def get_player_collection():
         "collection": [pm.to_dict() for pm in owned_monsters]
     }), 200
 
+# US-07: Read the player's current team
+@monsters_bp.route('/team', methods=['GET'])
+@require_jwt
+def get_team():
+    player_id = g.player_id
+    get_starter_monsters(player_id)
+    team_members = (
+        TeamMember.query
+        .filter_by(player_id=player_id)
+        .order_by(TeamMember.slot.asc())
+        .all()
+    )
+    return jsonify({
+        "player_id": player_id,
+        "team": [member.owned_monster.to_dict() for member in team_members],
+    }), 200
+
+# US-07: Save exactly three distinct owned monsters as the player's team
+@monsters_bp.route('/team', methods=['PUT'])
+@require_jwt
+def update_team():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+
+    owned_monster_ids = data.get("owned_monster_ids")
+    if (
+        not isinstance(owned_monster_ids, list)
+        or len(owned_monster_ids) != 3
+        or any(
+            not isinstance(monster_id, int) or isinstance(monster_id, bool)
+            for monster_id in owned_monster_ids
+        )
+        or len(set(owned_monster_ids)) != 3
+    ):
+        return jsonify({
+            "error": "owned_monster_ids must contain exactly 3 distinct monster ownership IDs"
+        }), 400
+
+    player_id = g.player_id
+    get_starter_monsters(player_id)
+    owned_monsters = PlayerMonster.query.filter(
+        PlayerMonster.player_id == player_id,
+        PlayerMonster.id.in_(owned_monster_ids),
+    ).all()
+    monsters_by_id = {monster.id: monster for monster in owned_monsters}
+    if len(monsters_by_id) != 3:
+        return jsonify({
+            "error": "All team monsters must belong to the authenticated player"
+        }), 400
+
+    TeamMember.query.filter_by(player_id=player_id).delete(
+        synchronize_session=False
+    )
+    for slot, ownership_id in enumerate(owned_monster_ids, start=1):
+        db.session.add(TeamMember(
+            player_id=player_id,
+            player_monster_id=monsters_by_id[ownership_id].id,
+            slot=slot,
+        ))
+    db.session.commit()
+
+    return jsonify({
+        "player_id": player_id,
+        "team": [monsters_by_id[ownership_id].to_dict() for ownership_id in owned_monster_ids],
+    }), 200
+
 # C9: Return the player's team and species available for capture
 @monsters_bp.route('/internal/players/<player_id>/team', methods=['GET'])
 @require_internal_secret

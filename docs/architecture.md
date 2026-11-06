@@ -103,6 +103,8 @@ A species is one of the 16 monsters in the catalogue and is the same for every p
 
 The player IDs stored in the Monster and Encounter databases are copied from the token, and the owned monster and species IDs stored in the Encounter database come from the Monster Service. None of them are foreign keys, because separate databases cannot reference each other.
 
+Whoever builds a service also builds its database: Elisa builds player-db, Elena builds monster-db and Hatem builds encounter-db. The person who writes the code is the one who knows which tables and rules it needs, and nobody has to wait for someone else's tables before starting.
+
 ### player-db (Player Service)
 
 `player`
@@ -275,6 +277,7 @@ Allowing one open encounter per player needs no timers or cleanup jobs. Because 
 | Open encounters | At most one per player; opening a new one closes the old one as escaped |
 | Opening an encounter without a valid team | Refused with 409 |
 | Database separation | One PostgreSQL container, login and volume per service |
+| Who builds each database | The owner of the service: player-db Elisa, monster-db Elena, encounter-db Hatem |
 | A separate "progress" table (level, experience) | Not used; progress is the collection, the monsters' stats and the encounter history |
 | Gateway owner | Elisa |
 | Team (table, `GET /team`, `PUT /team`) | Encounter Service, built by Hatem; moved from the Monster Service on Elena's suggestion |

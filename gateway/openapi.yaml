@@ -6,7 +6,6 @@ info:
 servers:
 - url: http://localhost:5005
 paths:
-
   /account:
     post:
       summary: Create a new user account

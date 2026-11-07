@@ -6,6 +6,8 @@ import tempfile
 import threading
 import traceback
 import uuid
+import jwt
+import time
 from bcrypt import hashpw, gensalt, checkpw
 
 app = Flask(__name__)
@@ -14,6 +16,15 @@ BASE_DIR = "/app"
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DATA_FILE = os.path.join(DATA_DIR, "users_data.json")
 SESSION_FILE = os.path.join(DATA_DIR, "session_tokens.json")
+
+PRIVATE_KEY_PATH = os.path.join(BASE_DIR, "keys", "private.pem")
+PUBLIC_KEY_PATH = os.path.join(BASE_DIR, "keys", "public.pem")
+
+with open(PRIVATE_KEY_PATH, 'r') as f:
+    PRIVATE_KEY = f.read()
+
+with open(PUBLIC_KEY_PATH, 'r') as f:
+    PUBLIC_KEY = f.read()
 
 db_lock = threading.Lock()
 
@@ -65,13 +76,6 @@ def save_users_to_file():
                 except OSError:
                     pass
             return False
-        
-def save_session_tokens():
-    try:
-        with open(SESSION_FILE, 'w', encoding='utf-8') as f:
-            json.dump(session_tokens, f, indent=4)
-    except Exception as e:
-        app.logger.error(f"Error while saving session token: {str(e)}")
 
 @atexit.register
 def save_data():
@@ -148,22 +152,21 @@ def login():
         password = body.get("password")
 
         if not isinstance(username, str) or not isinstance(password, str):
-            session_tokens.clear()
-            save_session_tokens()
-            return error("invalid_input", "Username and password must be strings")
+            return error("invalid_input", "Username and password must be strings", status=401)
 
         user = users_db.get(username)
         if not user or not checkpw(password.encode('utf-8'), user["password"].encode('utf-8')):
-            session_tokens.clear()
-            save_session_tokens()
             return error("unauthorized", "Invalid username or password", status=401)
 
-        token = str(uuid.uuid4())
-
-        session_tokens.clear()
-        session_tokens[token] = username
-
-        save_session_tokens()
+        token = jwt.encode(
+            {
+                "username": username,
+                "id": user["id"],
+                "exp": int(time.time()) + 3600
+            },
+            PRIVATE_KEY,
+            algorithm="RS256"
+        )
 
         return jsonify(message="Successful login", username=username, id=user["id"], token=token), 200
 

@@ -21,6 +21,8 @@ services:
     container_name: auth_service
     volumes:
       - ./data:/app/data
+      - ./private.pem:/app/keys/private.pem:ro
+      - ./public.pem:/app/keys/public.pem:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=2)"]
       interval: 5s

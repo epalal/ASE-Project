@@ -1,3 +1,0 @@
-Flask>=3.1,<4
-bcrypt>=4,<6
-pytest>=8.4,<9

@@ -1,9 +1,10 @@
 # Component tests of the Encounter Service (Lab 6): the real service and its own
-# database, with a stub in place of the Monster Service. Only the two ports the
-# tests need are published, and only on this computer.
+# database, with stubs in place of the Monster Service and the Player Service.
+# Only the ports the tests need are published, and only on this computer.
 #
 #   cp .env.example .env        then set the three values
-#   docker compose -f compose.encounter.yaml up --build -d
+#   docker compose -f compose.encounter.yaml up --build -d --wait
+#   Bruno: folders encounter and encounter-stub, environment encounter-component (tests/bruno/README.md)
 #   docker compose -f compose.encounter.yaml down -v     (-v also deletes the data and certificates)
 name: encounter-component
 
@@ -16,12 +17,13 @@ services:
   tls-init:
     build: ./tls_init
     environment:
-      TLS_SERVICES: encounter-service,encounter-db,monster-service
+      TLS_SERVICES: encounter-service,encounter-db,monster-service,player-service
     volumes:
       - tls-ca:/tls/ca
       - encounter-service-certs:/tls/encounter-service
       - encounter-db-certs:/tls/encounter-db
       - monster-service-certs:/tls/monster-service
+      - player-service-certs:/tls/player-service
 
   encounter-db:
     build: ./encounter_service/db
@@ -63,6 +65,24 @@ services:
       timeout: 3s
       retries: 20
 
+  # The Player Service stub signs login tokens with the Player Service's key, so
+  # the tests can log in as any player. The Encounter Service never calls it.
+  player-service:
+    build: ./player_stub
+    <<: *certificate-group
+    volumes:
+      - player-service-certs:/certs:ro
+    ports:
+      - "127.0.0.1:5001:5001"  # the tests ask POST /__tokens
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   encounter-service:
     build: ./encounter_service
     <<: *certificate-group
@@ -92,4 +112,5 @@ volumes:
   encounter-service-certs:
   encounter-db-certs:
   monster-service-certs:
+  player-service-certs:
   encounter-db-data:

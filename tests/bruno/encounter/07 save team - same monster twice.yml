@@ -1,0 +1,27 @@
+info:
+  name: save team - same monster twice
+  type: http
+  seq: 7
+
+http:
+  method: PUT
+  url: "{{encounterUrl}}/team"
+  body:
+    type: json
+    data: |-
+      {"monster_ids": ["101", "101", "105"]}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+    - expression: res.body.error
+      operator: eq
+      value: "duplicate_monster"
+
+settings:
+  encodeUrl: true

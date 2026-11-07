@@ -1,0 +1,27 @@
+info:
+  name: open - unknown challenge
+  type: http
+  seq: 13
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": 99}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "404"
+    - expression: res.body.error
+      operator: eq
+      value: "challenge_not_found"
+
+settings:
+  encodeUrl: true

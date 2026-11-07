@@ -1,0 +1,27 @@
+info:
+  name: open - player without a team
+  type: http
+  seq: 14
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": 12}
+  auth:
+    type: bearer
+    token: "{{tokenB}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "409"
+    - expression: res.body.error
+      operator: eq
+      value: "no_team"
+
+settings:
+  encodeUrl: true

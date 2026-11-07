@@ -1,0 +1,27 @@
+info:
+  name: open - challenge_id is text
+  type: http
+  seq: 12
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": "12"}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+    - expression: res.body.error
+      operator: eq
+      value: "invalid_input"
+
+settings:
+  encodeUrl: true

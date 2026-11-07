@@ -14,6 +14,11 @@ Special player IDs choose a failure, so a test can trigger it from outside:
   stub-500     the stub answers 500
   stub-slow    the stub answers only after STUB_SLOW_SECONDS (the caller should time out)
   stub-refuse  the stub refuses the reward with 409
+
+The roll cannot be chosen from outside, so some players own monsters strong
+enough to win against any challenge, even with the highest roll:
+  stub-strong  its rewards are accepted
+  stub-refuse  (above) its rewards are refused
 """
 
 import os
@@ -33,6 +38,8 @@ ROSTER = {
     15: ("Budbug", "Dark", 2, 3), 16: ("Leaflark", "Dark", 4, 3),
 }  # fmt: skip
 STARTERS = [1, 5, 9, 15]  # Elena's starter monsters: Sproutpaw, Drifin, Emberbun, Budbug
+STRONG_PLAYERS = {"stub-strong", "stub-refuse"}
+STRONG_STAT = 100  # three monsters at 100 beat any challenge with a win chance of exactly 1.0
 
 
 def catalogue_entry(species_id):
@@ -52,12 +59,13 @@ def owned_monster(player_id, species_id):
     """A player's monster, as Elena's PlayerMonster.to_dict() returns it. In the
     stub every starter has the ownership ID 100 + its species ID."""
     entry = catalogue_entry(species_id)
+    strong = player_id in STRONG_PLAYERS
     return {
         "ownership_id": 100 + species_id,
         "player_id": player_id,
         "acquired_at": "2026-11-06T10:00:00+00:00",
-        "atk": entry["power"],
-        "hp": entry["hp"],
+        "atk": STRONG_STAT if strong else entry["power"],
+        "hp": STRONG_STAT if strong else entry["hp"],
         "monster": entry,
     }
 

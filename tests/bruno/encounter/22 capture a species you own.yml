@@ -1,0 +1,27 @@
+info:
+  name: capture a species you own
+  type: http
+  seq: 22
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{ownedEncounterId}}/action"
+  body:
+    type: json
+    data: |-
+      {"action": "capture"}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "409"
+    - expression: res.body.error
+      operator: eq
+      value: "capture_not_offered"
+
+settings:
+  encodeUrl: true

@@ -1,0 +1,86 @@
+# Runs the tests of every service at each push and pull request (Lab 7).
+# A failing test turns the run red. To add a service, add its name to the matrix:
+#   unit:       a folder with requirements-dev.txt and its pytest tests
+#   component:  compose.<name>.yaml, a compose service <name>-service, and the Bruno
+#               folders <name> and <name>-stub with the environment <name>-component
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read  # the jobs only read the code
+
+jobs:
+  unit:
+    name: Unit tests (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false  # a failure in one service does not hide the others
+      matrix:
+        service: [encounter_service]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the dependencies
+        working-directory: ${{ matrix.service }}
+        run: pip install -r requirements-dev.txt
+
+      - name: Unit tests
+        working-directory: ${{ matrix.service }}
+        run: python -m pytest
+
+  component:
+    name: Component tests (${{ matrix.service }})
+    needs: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [encounter]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install the Bruno CLI
+        run: npm install -g @usebruno/cli@4.3.0
+
+      # Every value in .env.example gets a new random value, used only by this run.
+      - name: Make throwaway secrets for this run
+        run: |
+          grep -E '^[A-Z_]+=' .env.example | cut -d= -f1 | while read -r name; do
+            echo "$name=$(openssl rand -hex 16)"
+          done > .env
+
+      - name: Start the service with its database and stubs
+        run: docker compose -f compose.${{ matrix.service }}.yaml up --build -d --wait
+
+      # The services use HTTPS with our development authority, made at start-up.
+      - name: Trust our certificate authority
+        run: docker compose -f compose.${{ matrix.service }}.yaml cp ${{ matrix.service }}-service:/certs/ca.pem tests/bruno/ca.pem
+
+      - name: Component tests
+        working-directory: tests/bruno
+        run: bru run ${{ matrix.service }} ${{ matrix.service }}-stub --env ${{ matrix.service }}-component --cacert ca.pem
+
+      - name: Show the logs
+        if: failure()
+        run: docker compose -f compose.${{ matrix.service }}.yaml logs
+
+      - name: Stop the service
+        if: always()
+        run: docker compose -f compose.${{ matrix.service }}.yaml down -v

@@ -1,4 +1,5 @@
 name: CI Monster Service
+
 on:
   push:
     branches: [ main ]
@@ -22,12 +23,10 @@ jobs:
         run: npm install -g @usebruno/cli@4.3.0
 
       - name: Start monster_service database and API
-        # Start the monster_service stack in detached mode and wait for it to be ready
         run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait
 
       - name: Run Component Tests with Bruno
         working-directory: monster_service/tests/bruno
-        # Execute the Bruno CLI to run the component tests for the monster_service, using the local-component environment
         run: bru run monsters --env local-component
 
       - name: Show logs if failure

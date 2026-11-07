@@ -6,6 +6,7 @@ services:
       - "127.0.0.1:5005:5005"
     environment:
       AUTH_URL: http://auth_service:5001
+      MONSTER_URL: http://monster_service:5002
     depends_on:
       auth_service:
         condition: service_healthy
@@ -25,6 +26,18 @@ services:
       - ./public.pem:/app/keys/public.pem:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  monster_service:
+    build: ./monster_service
+    container_name: monster_service
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5002/health', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -5,6 +5,7 @@ from flask import Flask, jsonify, request
 app = Flask(__name__)
 
 AUTH_URL = os.environ.get("AUTH_URL", "http://localhost:5001").rstrip("/")
+MONSTER_URL = os.environ.get("MONSTER_URL", "http://localhost:5002").rstrip("/")
 REQUEST_TIMEOUT = 3
 
 def error(code, message, status=400):
@@ -60,6 +61,76 @@ def proxy_login():
         return error("invalid_request", str(exc))
 
     data, failure = forward("POST", f"{AUTH_URL}/login", json=body)
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+@app.get("/team")
+def proxy_get_team():
+    headers = {}
+    if "Authorization" in request.headers:
+        headers["Authorization"] = request.headers["Authorization"]
+
+    data, failure = forward("GET", f"{MONSTER_URL}/team", headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+@app.put("/team")
+def proxy_put_team():
+    try:
+        body = require_json_body()
+    except ValueError as exc:
+        return error("invalid_request", str(exc))
+
+    headers = {}
+    if "Authorization" in request.headers:
+        headers["Authorization"] = request.headers["Authorization"]
+
+    data, failure = forward("PUT", f"{MONSTER_URL}/team", json=body, headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+@app.get("/challenges")
+def proxy_get_challenges():
+    headers = {}
+    if "Authorization" in request.headers:
+        headers["Authorization"] = request.headers["Authorization"]
+
+    data, failure = forward("GET", f"{MONSTER_URL}/challenges", headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+@app.post("/encounters")
+def proxy_post_encounters():
+    try:
+        body = require_json_body()
+    except ValueError as exc:
+        return error("invalid_request", str(exc))
+
+    headers = {}
+    if "Authorization" in request.headers:
+        headers["Authorization"] = request.headers["Authorization"]
+
+    data, failure = forward("POST", f"{MONSTER_URL}/encounters", json=body, headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 201
+
+@app.post("/encounters/<encounter_id>/action")
+def proxy_post_encounter_action(encounter_id):
+    try:
+        body = require_json_body()
+    except ValueError as exc:
+        return error("invalid_request", str(exc))
+
+    headers = {}
+    if "Authorization" in request.headers:
+        headers["Authorization"] = request.headers["Authorization"]
+
+    data, failure = forward("POST", f"{MONSTER_URL}/encounters/{encounter_id}/action", json=body, headers=headers)
     if failure is not None:
         return failure
     return jsonify(data), 200

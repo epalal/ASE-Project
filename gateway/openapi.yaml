@@ -95,6 +95,240 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /team:
+    get:
+      summary: Get player team
+      description: Retrieves the monster IDs in the player's current team.
+      operationId: getTeam
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monster_ids:
+                    type: array
+                    items:
+                      type: integer
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update player team
+      description: Updates the player's team with the specified monster IDs.
+      operationId: updateTeam
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - monster_ids
+              properties:
+                monster_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Team updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monster_ids:
+                    type: array
+                    items:
+                      type: integer
+        '400':
+          description: Invalid request or team rule error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                
+  /challenges:
+    get:
+      summary: List challenges
+      description: Retrieves a list of all available challenges.
+      operationId: listChallenges
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Challenges retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenges:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        description:
+                          type: string
+                        wild_species_id:
+                          type: integer
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /encounters:
+    post:
+      summary: Open encounter
+      description: Opens a new encounter for a given challenge.
+      operationId: openEncounter
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - challenge_id
+              properties:
+                challenge_id:
+                  type: integer
+      responses:
+        '201':
+          description: Encounter opened successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Challenge not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict (e.g., no team)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /encounters/{encounter_id}/action:
+    post:
+      summary: Choose action in encounter
+      description: Sends an action for an active encounter.
+      operationId: chooseAction
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+        - in: path
+          name: encounter_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+      responses:
+        '200':
+          description: Action processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Encounter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Encounter closed or conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /health:
     get:

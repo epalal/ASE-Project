@@ -1,6 +1,8 @@
 """Design rule 7: services talk over HTTPS with certificates from our own
 certificate authority, made by tls_init/make_certs.py, and refuse any other."""
 
+import stat
+
 import jwt
 import pytest
 
@@ -80,6 +82,20 @@ def test_starting_again_keeps_the_authority_and_the_token_keys(tls):
 
     assert (tls / "ca" / "ca.pem").read_bytes() == authority_before
     assert (tls / "player-service" / "jwt_private.pem").read_bytes() == token_key_before
+
+
+def _permissions(path):
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def test_private_keys_can_be_read_only_by_their_owner_and_the_certificate_group(tls):
+    # Every service runs as its own non-root user and reads its key through the
+    # certificate group, which it joins in Docker Compose. The authority's keys
+    # stay with tls-init alone.
+    assert _permissions(tls / "encounter-service" / "server.key") == 0o640
+    assert _permissions(tls / "player-service" / "jwt_private.pem") == 0o640
+    assert _permissions(tls / "ca" / "ca.key") == 0o600
+    assert _permissions(tls / "ca" / "jwt_private.pem") == 0o600
 
 
 def test_a_token_signed_by_the_player_service_is_accepted_by_the_other_services(tls):

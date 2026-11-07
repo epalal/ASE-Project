@@ -13,6 +13,10 @@ Each folder below OUT is one Docker volume, mounted only by the service it belon
                        the key that checks login tokens (design rule 6)
   player-service/jwt_private.pem
                        the key that signs login tokens: only the Player Service gets it
+
+Every service runs as its own non-root user. A service's private keys can be read
+by their owner (tls-init) and by the certificate group, which each service joins in
+Docker Compose. The keys in ca/ can be read by tls-init alone.
 """
 
 import datetime as dt
@@ -36,17 +40,29 @@ SERVICES = [
 ]
 TOKEN_SIGNER = "player-service"  # the only service that may create login tokens
 VALID_DAYS = 365
+SERVICE_KEY_MODE = 0o640  # owner and the certificate group
+AUTHORITY_KEY_MODE = 0o600  # tls-init alone
 
 
 def _new_key():
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
-def _write_key(path, key):
-    path.write_bytes(
+def _write_secret(path, data, mode):
+    # The file is created with these permissions, so no other user can read it even for a moment.
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    with os.fdopen(descriptor, "wb") as secret:
+        secret.write(data)
+    os.chmod(path, mode)  # also when the file was already there
+
+
+def _write_key(path, key, mode):
+    _write_secret(
+        path,
         key.private_bytes(
             serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
-        )
+        ),
+        mode,
     )
 
 
@@ -86,7 +102,7 @@ def _make_authority(folder):
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
         .sign(key, hashes.SHA256())
     )
-    _write_key(folder / "ca.key", key)
+    _write_key(folder / "ca.key", key, AUTHORITY_KEY_MODE)
     _write_certificate(folder / "ca.pem", certificate)
     return key, certificate
 
@@ -125,7 +141,7 @@ def _make_service_certificate(service, authority_key, authority_certificate):
 
 def _make_token_keys(folder):
     key = _new_key()
-    _write_key(folder / "jwt_private.pem", key)
+    _write_key(folder / "jwt_private.pem", key, AUTHORITY_KEY_MODE)
     (folder / "jwt_public.pem").write_bytes(
         key.public_key().public_bytes(
             serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
@@ -162,11 +178,15 @@ def make_certs(out, services=SERVICES):
         _write_certificate(folder / "ca.pem", authority_certificate)
         if not _all_exist(folder / "server.key", folder / "server.pem"):
             key, certificate = _make_service_certificate(service, authority_key, authority_certificate)
-            _write_key(folder / "server.key", key)
+            _write_key(folder / "server.key", key, SERVICE_KEY_MODE)
             _write_certificate(folder / "server.pem", certificate)
         (folder / "jwt_public.pem").write_bytes((authority_folder / "jwt_public.pem").read_bytes())
         if service == TOKEN_SIGNER:
-            (folder / "jwt_private.pem").write_bytes((authority_folder / "jwt_private.pem").read_bytes())
+            _write_secret(
+                folder / "jwt_private.pem",
+                (authority_folder / "jwt_private.pem").read_bytes(),
+                SERVICE_KEY_MODE,
+            )
 
 
 if __name__ == "__main__":

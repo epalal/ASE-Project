@@ -7,20 +7,59 @@ from .errors import register_error_handlers
 from .models import db
 
 
+class StartupError(RuntimeError):
+    """The service cannot start because a setting is missing."""
+
+
+def _settings_from_environment():
+    """Read the settings Docker Compose passes in, and name every missing one."""
+    env = os.environ
+    public_key = env.get("JWT_PUBLIC_KEY", "").replace("\\n", "\n")
+    if not public_key and env.get("JWT_PUBLIC_KEY_PATH"):
+        with open(env["JWT_PUBLIC_KEY_PATH"], encoding="utf-8") as key_file:
+            public_key = key_file.read()
+    settings = {
+        "SQLALCHEMY_DATABASE_URI": env.get("DATABASE_URL"),
+        "JWT_PUBLIC_KEY": public_key,
+        "MONSTER_SERVICE_URL": env.get("MONSTER_SERVICE_URL"),
+        "INTERNAL_SERVICE_SECRET": env.get("INTERNAL_SERVICE_SECRET"),
+        "CA_CERT_PATH": env.get("CA_CERT_PATH"),
+    }
+    if env.get("JWT_ISSUER"):
+        settings["JWT_ISSUER"] = env["JWT_ISSUER"]
+    if env.get("JWT_AUDIENCE"):
+        settings["JWT_AUDIENCE"] = env["JWT_AUDIENCE"]
+
+    required = {
+        "DATABASE_URL": "SQLALCHEMY_DATABASE_URI",
+        "JWT_PUBLIC_KEY (or JWT_PUBLIC_KEY_PATH)": "JWT_PUBLIC_KEY",
+        "MONSTER_SERVICE_URL": "MONSTER_SERVICE_URL",
+        "INTERNAL_SERVICE_SECRET": "INTERNAL_SERVICE_SECRET",
+    }
+    missing = [name for name, key in required.items() if not settings[key]]
+    if missing:
+        raise StartupError("The Encounter Service cannot start. Missing settings: " + ", ".join(missing))
+    return settings
+
+
 def create_app(test_config=None, monster_client=None, draw=None):
-    """`draw` returns a random number in [0, 1). Production uses the operating
+    """Without `test_config`, the settings come from the environment.
+
+    `draw` returns a random number in [0, 1). Production uses the operating
     system's secure generator, so nobody can predict a roll; tests pass a fixed die."""
     app = Flask(__name__)
-    app.config.from_mapping(
-        SQLALCHEMY_DATABASE_URI=os.environ.get("DATABASE_URL"),
-        JWT_PUBLIC_KEY=os.environ.get("JWT_PUBLIC_KEY", "").replace("\\n", "\n"),
-        # Design rule 6: tokens are issued by the Player Service for this game.
-        JWT_ISSUER=os.environ.get("JWT_ISSUER", "player-service"),
-        JWT_AUDIENCE=os.environ.get("JWT_AUDIENCE", "monster-tamers"),
-    )
-    if test_config:
-        app.config.update(test_config)
+    # Design rule 6: tokens are issued by the Player Service for this game.
+    app.config.from_mapping(JWT_ISSUER="player-service", JWT_AUDIENCE="monster-tamers")
+    app.config.update(_settings_from_environment() if test_config is None else test_config)
 
+    if monster_client is None:  # production: the real Monster Service over HTTPS
+        from .http_monster_client import HttpMonsterClient
+
+        monster_client = HttpMonsterClient(
+            app.config["MONSTER_SERVICE_URL"],
+            app.config["INTERNAL_SERVICE_SECRET"],
+            ca_cert_path=app.config.get("CA_CERT_PATH"),
+        )
     app.extensions["monster_client"] = monster_client
     app.extensions["draw"] = draw or secrets.SystemRandom().random
     register_error_handlers(app)

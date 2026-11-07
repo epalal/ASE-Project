@@ -2,11 +2,9 @@
 against the Monster Service stub, the way Lab 6 tests a service's dependency."""
 
 import socket
-import threading
 
 import pytest
 import requests
-from werkzeug.serving import make_server
 
 from app.http_monster_client import HttpMonsterClient
 from app.monster_client import (
@@ -16,20 +14,7 @@ from app.monster_client import (
     RewardRefused,
     Species,
 )
-from stub import create_stub
-
-SECRET = "test-internal-secret"
-
-
-@pytest.fixture
-def stub_url():
-    """Run the Monster Service stub on a free local port for one test."""
-    stub = create_stub(internal_secret=SECRET, slow_seconds=1.0)
-    server = make_server("127.0.0.1", 0, stub, threaded=True)
-    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{server.server_port}"
-    server.shutdown()
+from conftest import STUB_SECRET as SECRET
 
 
 def _port_with_nothing_listening():

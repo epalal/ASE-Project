@@ -1,11 +1,32 @@
 import datetime as dt
+import threading
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from werkzeug.serving import make_server
 
 from app import create_app
+from stub import create_stub
+
+STUB_SECRET = "test-internal-secret"
+
+
+def run_in_background(wsgi_app, ssl_context=None):
+    """Serve a WSGI app on a free local port; returns the server (stop it with shutdown())."""
+    server = make_server("127.0.0.1", 0, wsgi_app, threaded=True, ssl_context=ssl_context)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+    thread.start()
+    return server
+
+
+@pytest.fixture
+def stub_url():
+    """The Monster Service stub, over real HTTP on a free local port, for one test."""
+    server = run_in_background(create_stub(internal_secret=STUB_SECRET, slow_seconds=1.0))
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
 from app.monster_client import (
     MonsterServiceTimeout,
     MonsterServiceUnavailable,

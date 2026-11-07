@@ -23,11 +23,14 @@ REFUSAL_CODES = {400, 404, 409}
 
 
 class HttpMonsterClient:
-    def __init__(self, base_url, internal_secret, timeout=REQUEST_TIMEOUT):
+    def __init__(self, base_url, internal_secret, timeout=REQUEST_TIMEOUT, ca_cert_path=None):
+        """`ca_cert_path` is our certificate authority: the Monster Service's HTTPS
+        certificate must be signed by it (design rule 7)."""
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._session = requests.Session()
         self._session.headers["X-Internal-Secret"] = internal_secret
+        self._session.verify = ca_cert_path or True
 
     def get_player_monsters(self, player_id):
         """C9: same body as the Monster Service's /collection, for any player."""

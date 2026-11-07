@@ -1,6 +1,7 @@
 # Component tests of the Encounter Service (Lab 6): the real service and its own
-# database, with stubs in place of the Monster Service and the Player Service.
-# Only the ports the tests need are published, and only on this computer.
+# database, exactly as in the full stack (encounter_service/compose.yaml), with stubs
+# in place of the Monster Service and the Player Service. Only the ports the tests
+# need are published, and only on this computer.
 #
 #   cp .env.example .env        then set the three values
 #   docker compose -f compose.encounter.yaml up --build -d --wait
@@ -8,43 +9,24 @@
 #   docker compose -f compose.encounter.yaml down -v     (-v also deletes the data and certificates)
 name: encounter-component
 
+include:
+  - tls_init/compose.yaml
+
 x-certificate-group: &certificate-group
-  # tls-init makes each private key readable by this group (10000). Each service
-  # joins it here to read its own key, and still runs as its own non-root user.
-  group_add: ["10000"]
+  group_add: ["10000"]  # to read its own key from tls-init (see tls_init/compose.yaml)
 
 services:
-  tls-init:
-    build: ./tls_init
-    environment:
-      TLS_SERVICES: encounter-service,encounter-db,monster-service,player-service
-    volumes:
-      - tls-ca:/tls/ca
-      - encounter-service-certs:/tls/encounter-service
-      - encounter-db-certs:/tls/encounter-db
-      - monster-service-certs:/tls/monster-service
-      - player-service-certs:/tls/player-service
-
   encounter-db:
-    build: ./encounter_service/db
-    <<: *certificate-group
-    environment:
-      POSTGRES_USER: encounter_admin
-      POSTGRES_PASSWORD: ${ENCOUNTER_DB_ADMIN_PASSWORD:?set it in .env}
-      POSTGRES_DB: encounter
-      ENCOUNTER_DB_PASSWORD: ${ENCOUNTER_DB_PASSWORD:?set it in .env}
-    volumes:
-      - encounter-db-certs:/certs:ro
-      - encounter-db-data:/var/lib/postgresql/data
-    depends_on:
-      tls-init:
-        condition: service_completed_successfully
-    healthcheck:
-      # Over TCP, so it only passes once the real server is up, after the first-start script.
-      test: ["CMD", "pg_isready", "-h", "localhost", "-U", "encounter_admin", "-d", "encounter"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
+    extends:
+      file: encounter_service/compose.yaml
+      service: encounter-db
+
+  encounter-service:
+    extends:
+      file: encounter_service/compose.yaml
+      service: encounter-service
+    ports:
+      - "127.0.0.1:5003:5003"  # only here, for the tests; in the full stack the gateway is the way in
 
   # The stub, under the real service's name so the certificate and the URL match.
   monster-service:
@@ -83,34 +65,5 @@ services:
       timeout: 3s
       retries: 20
 
-  encounter-service:
-    build: ./encounter_service
-    <<: *certificate-group
-    environment:
-      DATABASE_URL: "postgresql://encounter_app:${ENCOUNTER_DB_PASSWORD}@encounter-db:5432/encounter?sslmode=verify-full&sslrootcert=/certs/ca.pem"
-      JWT_PUBLIC_KEY_PATH: /certs/jwt_public.pem
-      MONSTER_SERVICE_URL: https://monster-service:5002
-      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
-      CA_CERT_PATH: /certs/ca.pem
-    volumes:
-      - encounter-service-certs:/certs:ro
-    ports:
-      - "127.0.0.1:5003:5003"
-    depends_on:
-      encounter-db:
-        condition: service_healthy
-      monster-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5003/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
-
 volumes:
-  tls-ca:
-  encounter-service-certs:
-  encounter-db-certs:
-  monster-service-certs:
-  player-service-certs:
   encounter-db-data:

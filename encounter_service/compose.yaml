@@ -1,0 +1,60 @@
+# The Encounter Service and its own database. The team's docker-compose.yaml
+# includes this file, and compose.encounter.yaml reuses it with stubs for the
+# component tests. Nothing is published: the gateway reaches the service on the
+# Docker network at https://encounter-service:5003. Needs tls_init/compose.yaml too.
+#
+#   include:
+#     - tls_init/compose.yaml
+#     - encounter_service/compose.yaml
+
+x-certificate-group: &certificate-group
+  # tls-init makes each private key readable by this group (10000). Each container
+  # joins it to read its own key, and still runs as its own non-root user.
+  group_add: ["10000"]
+
+services:
+  encounter-db:
+    build: ./db
+    <<: *certificate-group
+    environment:
+      POSTGRES_USER: encounter_admin
+      POSTGRES_PASSWORD: ${ENCOUNTER_DB_ADMIN_PASSWORD:?set it in .env}
+      POSTGRES_DB: encounter
+      ENCOUNTER_DB_PASSWORD: ${ENCOUNTER_DB_PASSWORD:?set it in .env}
+    volumes:
+      - encounter-db-certs:/certs:ro
+      - encounter-db-data:/var/lib/postgresql/data
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+    healthcheck:
+      # Over TCP, so it only passes once the real server is up, after the first-start script.
+      test: ["CMD", "pg_isready", "-h", "localhost", "-U", "encounter_admin", "-d", "encounter"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  encounter-service:
+    build: .
+    <<: *certificate-group
+    environment:
+      DATABASE_URL: "postgresql://encounter_app:${ENCOUNTER_DB_PASSWORD}@encounter-db:5432/encounter?sslmode=verify-full&sslrootcert=/certs/ca.pem"
+      JWT_PUBLIC_KEY_PATH: /certs/jwt_public.pem
+      MONSTER_SERVICE_URL: https://monster-service:5002
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it in .env}
+      CA_CERT_PATH: /certs/ca.pem
+    volumes:
+      - encounter-service-certs:/certs:ro
+    depends_on:
+      encounter-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5003/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  encounter-service-certs:
+  encounter-db-certs:
+  encounter-db-data:

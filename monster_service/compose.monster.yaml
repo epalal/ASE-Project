@@ -1,0 +1,29 @@
+name: ase-monster-test
+
+services:
+  monster_service:
+    build: .
+    ports:
+      - "127.0.0.1:5002:5002"
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@monster_db:5432/monster_db
+      - INTERNAL_SERVICE_SECRET=test-internal-secret-key
+      - JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA02...your_key_here...\n-----END PUBLIC KEY-----
+    depends_on:
+      monster_db:
+        condition: service_healthy
+
+  monster_db:
+    image: postgres:15-alpine
+    container_name: monster_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=monster_db
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

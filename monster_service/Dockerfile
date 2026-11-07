@@ -22,4 +22,4 @@ USER appuser
 
 EXPOSE 5002
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5002", "--certfile", "/app/cert.pem", "--keyfile", "/app/key.pem", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5002", "--certfile", "/app/cert.pem", "--keyfile", "/app/key.pem", "app:create_app()"]

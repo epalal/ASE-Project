@@ -1,0 +1,45 @@
+info:
+  name: open against Ashwing
+  type: http
+  seq: 15
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": 12}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("encounterId", res.body.id);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "201"
+    - expression: res.body.status
+      operator: eq
+      value: "open"
+    - expression: res.body.team_power
+      operator: eq
+      value: "8"
+    - expression: res.body.challenge_power
+      operator: eq
+      value: "7.5"
+    - expression: res.body.p_win
+      operator: between
+      value: "0.5744, 0.5745"
+    - expression: res.body.p_capture
+      operator: between
+      value: "0.4308, 0.4309"
+    - expression: res.body.result
+      operator: isNull
+
+settings:
+  encodeUrl: true

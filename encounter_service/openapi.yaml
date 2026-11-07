@@ -1,0 +1,685 @@
+openapi: 3.1.0
+info:
+  title: Monster Tamer - Encounter Service API
+  version: 1.0.0
+  description: |-
+    Keeps each player's team of three monsters (US-14, US-15, US-16), lists the
+    challenges (US-17), runs encounters (US-18, US-19, US-21, US-22) and keeps their
+    history (US-23, US-24). A player opens an encounter against a challenge and then
+    chooses one action: attack, capture or escape. The roll happens here, on the
+    server, with a secure random generator.
+
+    The service reads the player's monsters and the wild monster's stats from the
+    Monster Service, and asks it to apply the reward after a win or a capture. It
+    never reads another service's database.
+
+    Every endpoint except /health needs a login token from the Player Service. The
+    player is always the token's `sub`: no URL or body can name another player.
+
+    Every error has the body `{"error": "<code>", "message": "<text for people>"}`.
+servers:
+  - url: https://encounter-service:5003
+    description: Private Docker Compose service name. Clients reach it through the gateway.
+  - url: https://localhost:5003
+    description: Component tests (compose.encounter.yaml)
+security:
+  - PlayerToken: []
+tags:
+  - name: Health
+  - name: Team
+  - name: Challenges
+  - name: Encounters
+  - name: History
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness check
+      description: Answers as soon as the process runs. It does not check the database or the Monster Service.
+      operationId: encounterHealth
+      security: []
+      responses:
+        '200':
+          description: The service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                  service:
+                    type: string
+                    const: encounter_service
+              example:
+                status: ok
+                service: encounter_service
+
+  /team:
+    get:
+      tags: [Team]
+      summary: The player's saved team (US-16)
+      description: |-
+        The owned monster IDs of the team, in slot order. An empty list means the
+        player has not saved a team yet. Names and stats are in the Monster
+        Service's GET /collection.
+      operationId: getTeam
+      responses:
+        '200':
+          description: The saved team, or an empty list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+              example:
+                monster_ids: ['101', '105', '109']
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Team]
+      summary: Save the team (US-14, US-15)
+      description: |-
+        Replaces the whole team. The service first asks the Monster Service which
+        monsters the player owns, then checks the team rules: exactly three
+        monsters, all different, all owned by the player.
+      operationId: saveTeam
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamRequest'
+            example:
+              monster_ids: ['101', '105', '109']
+      responses:
+        '200':
+          description: The team is saved. The body is the saved team.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+              example:
+                monster_ids: ['101', '105', '109']
+        '400':
+          description: |-
+            - `invalid_input`: the body is not `{"monster_ids": [...]}` with each ID as text
+            - `team_size`: not exactly three monsters
+            - `duplicate_monster`: the same monster in two slots
+            - `not_owned`: a monster the player does not own
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        enum: [invalid_input, team_size, duplicate_monster, not_owned]
+              example:
+                error: not_owned
+                message: A team can only use monsters you own.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          $ref: '#/components/responses/MonsterServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/MonsterServiceTimeout'
+
+  /challenges:
+    get:
+      tags: [Challenges]
+      summary: The challenges a player can take (US-17)
+      description: |-
+        One challenge for each of the 16 species in the Monster Service's catalogue,
+        with the same IDs. The wild monster's stats are read from the catalogue when
+        an encounter opens.
+      operationId: listChallenges
+      responses:
+        '200':
+          description: All the challenges, by ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeList'
+              example:
+                challenges:
+                  - id: 12
+                    name: Wild Ashwing
+                    description: A wild Ashwing appears. Attack it, try to capture it or escape.
+                    wild_species_id: 12
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /encounters:
+    get:
+      tags: [History]
+      summary: The player's previous encounters (US-23)
+      description: |-
+        The player's finished encounters, newest first, at most the 50 newest. An
+        encounter that is still open is not listed; read it with
+        GET /encounters/{encounter_id}.
+      operationId: listEncounters
+      responses:
+        '200':
+          description: The finished encounters, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncounterList'
+              example:
+                encounters:
+                  - id: a81f0e9f-4f6c-4a4f-879e-c59fa62958e5
+                    status: closed
+                    challenge_id: 12
+                    wild: {species_id: 12, name: Ashwing, type: fire, atk: 3, hp: 2}
+                    team:
+                      - {id: '101', species_id: 1, name: Sproutpaw, type: grass, atk: 2, hp: 2}
+                      - {id: '105', species_id: 5, name: Drifin, type: water, atk: 2, hp: 3}
+                      - {id: '109', species_id: 9, name: Emberbun, type: fire, atk: 3, hp: 2}
+                    team_power: 8.0
+                    challenge_power: 7.5
+                    p_win: 0.574442516811659
+                    p_capture: 0.43083188760874425
+                    action: attack
+                    roll: 0.35355065176014455
+                    result: win
+                    reward_status: applied
+                    created_at: '2026-11-07T15:02:11.481203+00:00'
+                    closed_at: '2026-11-07T15:02:14.907665+00:00'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Encounters]
+      summary: Open an encounter against a challenge (US-18)
+      description: |-
+        In this order, the service:
+
+        1. sends again any reward of this player that is still `pending`, so the fight uses the new stats;
+        2. reads the player's monsters and the wild monster's stats from the Monster Service;
+        3. checks that the saved team is still three different monsters the player owns;
+        4. computes the chances (below);
+        5. closes the player's open encounter, if there is one, as an escape: a player has at most one open encounter;
+        6. saves and returns the new encounter, with `status` open.
+
+        How the chances are computed:
+
+        - a monster's power is (ATK + HP) / 2, plus 1 if its type beats the wild monster's type, minus 1 if it loses to it, and never below 0;
+        - fire beats dark, dark beats grass, grass beats water, water beats fire;
+        - `team_power` is the sum of the three team monsters' powers;
+        - `challenge_power` is 3 × the wild monster's power;
+        - `p_win` = 1 / (1 + e^(-0.6 × (team_power - challenge_power)));
+        - `p_capture` = 0.75 × `p_win`, or null when the player already owns the wild monster's species.
+      operationId: openEncounter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenEncounterRequest'
+            example:
+              challenge_id: 12
+      responses:
+        '201':
+          description: The encounter is open. The next step is to choose an action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Encounter'
+              example:
+                id: a81f0e9f-4f6c-4a4f-879e-c59fa62958e5
+                status: open
+                challenge_id: 12
+                wild: {species_id: 12, name: Ashwing, type: fire, atk: 3, hp: 2}
+                team:
+                  - {id: '101', species_id: 1, name: Sproutpaw, type: grass, atk: 2, hp: 2}
+                  - {id: '105', species_id: 5, name: Drifin, type: water, atk: 2, hp: 3}
+                  - {id: '109', species_id: 9, name: Emberbun, type: fire, atk: 3, hp: 2}
+                team_power: 8.0
+                challenge_power: 7.5
+                p_win: 0.574442516811659
+                p_capture: 0.43083188760874425
+                action: null
+                roll: null
+                result: null
+                reward_status: none
+                created_at: '2026-11-07T15:02:11.481203+00:00'
+                closed_at: null
+        '400':
+          description: '`invalid_input`: the body is not `{"challenge_id": <whole number from 1>}`'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        const: invalid_input
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: '`challenge_not_found`: there is no challenge with this ID'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        const: challenge_not_found
+        '409':
+          description: |-
+            - `no_team`: the player has no saved team, or a team monster is no longer theirs
+            - `conflict`: two requests changed the same data at the same moment; try again
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        enum: [no_team, conflict]
+              example:
+                error: no_team
+                message: Save a valid team of three monsters you own first.
+        '502':
+          $ref: '#/components/responses/MonsterServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/MonsterServiceTimeout'
+
+  /encounters/{encounter_id}:
+    get:
+      tags: [History]
+      summary: One encounter of the player, open or finished (US-24)
+      operationId: getEncounter
+      parameters:
+        - name: encounter_id
+          in: path
+          required: true
+          description: The `id` returned when the encounter was opened
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The encounter, in the same shape as every other encounter answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Encounter'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: |-
+            `encounter_not_found`: the player has no encounter with this ID. An
+            encounter of another player gives the same answer, so nobody can learn
+            which IDs exist.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        const: encounter_not_found
+
+  /encounters/{encounter_id}/action:
+    post:
+      tags: [Encounters]
+      summary: Attack, capture or escape (US-19, US-21, US-22)
+      description: |-
+        Plays the one action of an open encounter and closes it.
+
+        - `attack`: the server rolls a number from 0 up to 1 (1 excluded). The result is `win` when the roll is below `p_win`, otherwise `loss`.
+        - `capture`: the same with `p_capture`; the result is `captured` or `failed`. It is not offered when the player already owns the species.
+        - `escape`: always works and has no roll; the result is `escaped`.
+
+        A win gives +1 ATK and +1 HP to each of the three team monsters; the Monster
+        Service keeps each stat at most 3 above the species' base. A capture adds the
+        wild monster to the player's collection. A loss, a failed capture and an
+        escape give nothing.
+
+        The encounter is closed and saved before the Monster Service is asked for the
+        reward, so two requests can never reward the same encounter twice. If the
+        Monster Service cannot be reached, the result still counts and
+        `reward_status` is `pending`: the reward is sent again before the player's
+        next encounter. If the Monster Service refuses the reward, `reward_status` is
+        `failed`. This endpoint never answers 502 or 504.
+      operationId: chooseAction
+      parameters:
+        - name: encounter_id
+          in: path
+          required: true
+          description: The `id` returned when the encounter was opened
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+            example:
+              action: attack
+      responses:
+        '200':
+          description: The encounter is closed, with its result and the state of its reward
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Encounter'
+              example:
+                id: a81f0e9f-4f6c-4a4f-879e-c59fa62958e5
+                status: closed
+                challenge_id: 12
+                wild: {species_id: 12, name: Ashwing, type: fire, atk: 3, hp: 2}
+                team:
+                  - {id: '101', species_id: 1, name: Sproutpaw, type: grass, atk: 2, hp: 2}
+                  - {id: '105', species_id: 5, name: Drifin, type: water, atk: 2, hp: 3}
+                  - {id: '109', species_id: 9, name: Emberbun, type: fire, atk: 3, hp: 2}
+                team_power: 8.0
+                challenge_power: 7.5
+                p_win: 0.574442516811659
+                p_capture: 0.43083188760874425
+                action: attack
+                roll: 0.35355065176014455
+                result: win
+                reward_status: applied
+                created_at: '2026-11-07T15:02:11.481203+00:00'
+                closed_at: '2026-11-07T15:02:14.907665+00:00'
+        '400':
+          description: '`invalid_input`: the body is not `{"action": "attack"}`, `{"action": "capture"}` or `{"action": "escape"}`'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        const: invalid_input
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: |-
+            `encounter_not_found`: the player has no encounter with this ID. An
+            encounter of another player gives the same answer, so nobody can learn
+            which IDs exist.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        const: encounter_not_found
+        '409':
+          description: |-
+            - `encounter_closed`: the encounter is already over
+            - `capture_not_offered`: the player already owns this species
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        enum: [encounter_closed, capture_not_offered]
+              example:
+                error: encounter_closed
+                message: This encounter is already over.
+
+components:
+  securitySchemes:
+    PlayerToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |-
+        Login token from the Player Service, signed with RS256 and checked with the
+        Player Service's public key. Required claims: `exp`, `sub` (the player ID),
+        `aud` = monster-tamers and `iss` = player-service.
+
+  responses:
+    Unauthorized:
+      description: '`unauthorized`: no token, or a token that is forged, expired, for another audience or issuer, or missing a claim'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - properties:
+                  error:
+                    const: unauthorized
+          example:
+            error: unauthorized
+            message: A valid login token is required.
+    Conflict:
+      description: '`conflict`: two requests changed the same data at the same moment; try again'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - properties:
+                  error:
+                    const: conflict
+    MonsterServiceUnavailable:
+      description: '`monster_service_unavailable`: the Monster Service is down or answered with an error'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - properties:
+                  error:
+                    const: monster_service_unavailable
+    MonsterServiceTimeout:
+      description: '`monster_service_timeout`: the Monster Service did not answer within 3 seconds'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - properties:
+                  error:
+                    const: monster_service_timeout
+
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: A code for programs
+        message:
+          type: string
+          description: A sentence for people
+
+    OwnedMonsterId:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: The ID of one monster the player owns, as the Monster Service's collection gives it, written as text
+      examples: ['101']
+
+    Team:
+      type: object
+      required: [monster_ids]
+      properties:
+        monster_ids:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/OwnedMonsterId'
+
+    TeamRequest:
+      type: object
+      required: [monster_ids]
+      properties:
+        monster_ids:
+          type: array
+          minItems: 3
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/OwnedMonsterId'
+
+    Challenge:
+      type: object
+      required: [id, name, description, wild_species_id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        description:
+          type: string
+        wild_species_id:
+          type: integer
+          minimum: 1
+          maximum: 16
+          description: The species in the Monster Service's catalogue
+
+    ChallengeList:
+      type: object
+      required: [challenges]
+      properties:
+        challenges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Challenge'
+
+    EncounterList:
+      type: object
+      required: [encounters]
+      properties:
+        encounters:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Encounter'
+
+    OpenEncounterRequest:
+      type: object
+      required: [challenge_id]
+      properties:
+        challenge_id:
+          type: integer
+          minimum: 1
+
+    ActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [attack, capture, escape]
+
+    MonsterType:
+      type: string
+      enum: [fire, water, grass, dark]
+
+    TeamMonster:
+      type: object
+      description: A team monster's stats at the moment the encounter opened
+      required: [id, species_id, name, type, atk, hp]
+      properties:
+        id:
+          $ref: '#/components/schemas/OwnedMonsterId'
+        species_id:
+          type: integer
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/MonsterType'
+        atk:
+          type: integer
+        hp:
+          type: integer
+
+    WildMonster:
+      type: object
+      description: The wild monster's stats from the catalogue, at the moment the encounter opened
+      required: [species_id, name, type, atk, hp]
+      properties:
+        species_id:
+          type: integer
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/MonsterType'
+        atk:
+          type: integer
+        hp:
+          type: integer
+
+    Encounter:
+      type: object
+      required: [id, status, challenge_id, wild, team, team_power, challenge_power, p_win, p_capture, action, roll, result, reward_status, created_at, closed_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [open, closed]
+        challenge_id:
+          type: integer
+        wild:
+          $ref: '#/components/schemas/WildMonster'
+        team:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/TeamMonster'
+        team_power:
+          type: number
+          minimum: 0
+        challenge_power:
+          type: number
+          minimum: 0
+        p_win:
+          type: number
+          minimum: 0
+          maximum: 1
+        p_capture:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 1
+          description: Null when the player already owns this species, so capture is not offered
+        action:
+          type: [string, 'null']
+          enum: [attack, capture, escape, null]
+          description: Null while the encounter is open
+        roll:
+          type: [number, 'null']
+          minimum: 0
+          exclusiveMaximum: 1
+          description: Null while the encounter is open, and for an escape
+        result:
+          type: [string, 'null']
+          enum: [win, loss, captured, failed, escaped, null]
+          description: Null while the encounter is open
+        reward_status:
+          type: string
+          enum: [none, pending, applied, failed]
+          description: |-
+            - `none`: no reward (still open, a loss, a failed capture or an escape)
+            - `pending`: the Monster Service could not be reached; sent again before the next encounter
+            - `applied`: the Monster Service applied the reward
+            - `failed`: the Monster Service refused the reward; it is not sent again
+        created_at:
+          type: string
+          format: date-time
+          description: When the encounter was opened, in UTC
+        closed_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the action closed it, in UTC; null while it is open

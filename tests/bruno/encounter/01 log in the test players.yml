@@ -1,0 +1,26 @@
+info:
+  name: log in the test players
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{playerStubUrl}}/__tokens"
+  body:
+    type: json
+    data: |-
+      {"player_ids": ["tamer-a", "tamer-b"]}
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("tokenA", res.body.tokens["tamer-a"]);
+        bru.setVar("tokenB", res.body.tokens["tamer-b"]);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true

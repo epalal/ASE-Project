@@ -1,0 +1,30 @@
+info:
+  name: win but the reward is refused
+  type: http
+  seq: 11
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{refusedEncounterId}}/action"
+  body:
+    type: json
+    data: |-
+      {"action": "attack"}
+  auth:
+    type: bearer
+    token: "{{tokenRefuse}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.result
+      operator: eq
+      value: "win"
+    - expression: res.body.reward_status
+      operator: eq
+      value: "failed"
+
+settings:
+  encodeUrl: true

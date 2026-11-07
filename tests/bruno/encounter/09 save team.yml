@@ -1,0 +1,30 @@
+info:
+  name: save team
+  type: http
+  seq: 9
+
+http:
+  method: PUT
+  url: "{{encounterUrl}}/team"
+  body:
+    type: json
+    data: |-
+      {"monster_ids": ["101", "105", "109"]}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.monster_ids
+      operator: length
+      value: "3"
+    - expression: res.body.monster_ids[0]
+      operator: eq
+      value: "\"101\""
+
+settings:
+  encodeUrl: true

@@ -1,0 +1,27 @@
+info:
+  name: action - another player's encounter
+  type: http
+  seq: 17
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{encounterId}}/action"
+  body:
+    type: json
+    data: |-
+      {"action": "escape"}
+  auth:
+    type: bearer
+    token: "{{tokenB}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "404"
+    - expression: res.body.error
+      operator: eq
+      value: "encounter_not_found"
+
+settings:
+  encodeUrl: true

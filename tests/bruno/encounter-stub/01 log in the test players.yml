@@ -1,0 +1,28 @@
+info:
+  name: log in the test players
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{playerStubUrl}}/__tokens"
+  body:
+    type: json
+    data: |-
+      {"player_ids": ["stub-strong", "stub-refuse", "stub-500", "stub-slow"]}
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("tokenStrong", res.body.tokens["stub-strong"]);
+        bru.setVar("tokenRefuse", res.body.tokens["stub-refuse"]);
+        bru.setVar("token500", res.body.tokens["stub-500"]);
+        bru.setVar("tokenSlow", res.body.tokens["stub-slow"]);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true

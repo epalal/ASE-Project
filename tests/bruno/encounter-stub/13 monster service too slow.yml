@@ -1,0 +1,27 @@
+info:
+  name: monster service too slow
+  type: http
+  seq: 13
+
+http:
+  method: PUT
+  url: "{{encounterUrl}}/team"
+  body:
+    type: json
+    data: |-
+      {"monster_ids": ["101", "105", "109"]}
+  auth:
+    type: bearer
+    token: "{{tokenSlow}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "504"
+    - expression: res.body.error
+      operator: eq
+      value: "monster_service_timeout"
+
+settings:
+  encodeUrl: true

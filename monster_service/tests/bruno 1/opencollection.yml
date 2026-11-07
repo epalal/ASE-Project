@@ -1,0 +1,28 @@
+opencollection: 1.0.0
+
+info:
+  name: ASE API
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+request:
+  auth:
+    type: bearer
+    token: |-
+      ggM///bdVy2hug3xvzFl3gWZcO31CvRoytuiJ2uR0fgMPFRUjdv/HViUaO3dd429
+      eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0X3BsYXllcl8wMSJ9.r6ZDl-ti4t_7jbuLmnA7WX8OO6UWtC7rJPEIq_D2Hoojk02s2FqS1EGa7j54eamknYmibR4OaXP7QfKtNLzMdNIUXGeE0nawuglKikPdaine8nzsYwZXBL3H96BwyxR31lWYQVpdViqgAiF8K_saAJvS7jYoQl4d_YV2rAfX1B0-57iCOjno8J2I9GC5-Z2L8EOPFmpkG-mXQvgVW5U8Pkrx8lpKvnvxW5Y-6DvSalr3BBkDykctDZwVYN0jyFv7jKvZHJpxw8bk6keTEqZVn6LBdyq9l9gddyB8j62zxweo4SS7DTl_UW-NPMy6NMQ3j-QrGZW45B1z9QoFvdmFNg
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

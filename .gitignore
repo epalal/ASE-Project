@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets: never commit these (design rule 7)
+.env
+*.pem
+*.key
+certs/
+
+# Local data, Mac and editor files
+data/
+.DS_Store
+.vscode/
+.idea/

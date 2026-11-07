@@ -1,0 +1,8 @@
+name: encounter-component
+variables:
+  - name: encounterUrl
+    value: https://localhost:5003
+  - name: monsterStubUrl
+    value: https://localhost:5004
+  - name: playerStubUrl
+    value: https://localhost:5001

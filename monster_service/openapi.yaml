@@ -1,0 +1,259 @@
+openapi: 3.0.3
+info:
+  title: Monster Tamer - Monster Service API
+  description: >
+    Microservice to manage the global encyclopedia of 16 monsters (US-10, US-11),
+    the initial assignment via Lazy Init (US-06), the player's personal collection (US-09),
+    and the internal assignment of post-encounter rewards (US-12).
+  version: 1.0.0
+
+servers:
+  - url: https://localhost:5002
+    description: Monster Service (Internal HTTPS endpoint)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT signed with algorithm RS256 from the Player/Auth Service. RS256 uses a private key of 2048 bits to sign and the public key configured in the Monster Service to verify the signature.
+    InternalSecretAuth:
+      type: apiKey
+      in: header
+      name: X-Internal-Secret
+      description: Shared secret for internal communication between microservices. Must match the value of the environment variable INTERNAL_SERVICE_SECRET.
+
+  schemas:
+    Monster:
+      type: object
+      required: [id, name, element, power, hp, image_url]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 16
+          example: 9
+        name:
+          type: string
+          example: Emberbun
+        element:
+          type: string
+          enum: [Fire, Water, Dark, Grass]
+          example: Fire
+        power:
+          type: integer
+          description: ATK
+          example: 3
+        hp:
+          type: integer
+          description: HP
+          example: 2
+        image_url:
+          type: string
+          example: /assets/monsters/emberbun.png
+
+    OwnedMonster:
+      type: object
+      required: [ownership_id, player_id, acquired_at, atk, hp, monster]
+      properties:
+        ownership_id:
+          type: integer
+          example: 1
+        player_id:
+          type: string
+          example: player_123
+        acquired_at:
+          type: string
+          format: date-time
+          example: "2026-11-05T18:00:00Z"
+        atk:
+          type: integer
+          description: Player-specific attack value, capped at the catalog value plus 3.
+          example: 4
+        hp:
+          type: integer
+          description: Player-specific health value, capped at the catalog value plus 3.
+          example: 3
+        monster:
+          $ref: '#/components/schemas/Monster'
+
+    StatsRewardRequest:
+      type: object
+      required: [player_id, encounter_id, owned_monster_ids]
+      properties:
+        player_id:
+          type: string
+          example: player_123
+        encounter_id:
+          type: string
+          description: Unique encounter ID used for idempotency.
+          example: enc_987654
+        owned_monster_ids:
+          type: array
+          items:
+            type: integer
+          example: [1, 2]
+        atk_bonus:
+          type: integer
+          minimum: 0
+          default: 0
+        hp_bonus:
+          type: integer
+          minimum: 0
+          default: 0
+
+    CaptureRewardRequest:
+      type: object
+      required: [player_id, encounter_id, captured_species_id]
+      properties:
+        player_id:
+          type: string
+          example: player_123
+        encounter_id:
+          type: string
+          example: enc_987654
+        captured_species_id:
+          type: integer
+          minimum: 1
+          maximum: 16
+          example: 11
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Error message describing the issue
+
+paths:
+  /health:
+    get:
+      summary: Healthcheck of the Monster Service (US-01)
+      responses:
+        '200':
+          description: Active service
+
+  /monsters:
+    get:
+      summary: Returns the complete catalog of the 16 monsters (US-10)
+      tags: [Catalog]
+      responses:
+        '200':
+          description: List of all 16 monsters in the catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Monster'
+
+  /monsters/{monster_id}:
+    get:
+      summary: Returns the details of a specific monster (US-11)
+      tags: [Catalog]
+      parameters:
+        - name: monster_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Monster's details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monster'
+        '404':
+          description: ID not valid or monster not found in the catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /collection:
+    get:
+      summary: Returns the player's collection and performs Lazy Init on the first access (US-06, US-09)
+      tags: [Collection]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Personal collection of the player, including the count of monsters and their details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  player_id:
+                    type: string
+                  count:
+                    type: integer
+                  collection:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OwnedMonster'
+        '401':
+          description: Token JWT missing, expired, or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/players/{player_id}/team:
+    get:
+      summary: Returns the player's team and owned species IDs (C9)
+      tags: [Internal]
+      security:
+        - InternalSecretAuth: []
+      parameters:
+        - name: player_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team snapshot and species already owned by the player
+        '403':
+          description: Internal service authentication failed
+
+  /internal/rewards:
+    post:
+      summary: Applies a stats or capture reward from the Encounter service (C10)
+      tags: [Internal Rewards]
+      security:
+        - InternalSecretAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/StatsRewardRequest'
+                - $ref: '#/components/schemas/CaptureRewardRequest'
+      responses:
+        '201':
+          description: Capture reward successfully added to the player's collection
+        '200':
+          description: Stats reward applied or reward already assigned for this encounter_id
+        '400':
+          description: Request body missing or invalid JSON schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Header X-Internal-Secret missing or invalid (not matching the environment variable INTERNAL_SERVICE_SECRET)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Player-owned monster or captured species not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

@@ -43,5 +43,13 @@ services:
       retries: 10
       start_period: 5s
 
+  monster:
+    build: ./monster_service
+    container_name: monster_service
+    environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?INTERNAL_SERVICE_SECRET must be set}
+    expose:
+      - "5002"
+
 volumes:
   shared-data:

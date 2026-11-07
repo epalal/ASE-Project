@@ -1,0 +1,23 @@
+info:
+  name: stub was asked for the player's monsters
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{monsterStubUrl}}/__calls"
+
+runtime:
+  assertions:
+    - expression: res.body
+      operator: length
+      value: "1"
+    - expression: res.body[0].method
+      operator: eq
+      value: "GET"
+    - expression: res.body[0].path
+      operator: eq
+      value: "/internal/players/stub-strong/monsters"
+
+settings:
+  encodeUrl: true

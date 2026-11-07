@@ -1,0 +1,30 @@
+info:
+  name: attack always wins
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{strongEncounterId}}/action"
+  body:
+    type: json
+    data: |-
+      {"action": "attack"}
+  auth:
+    type: bearer
+    token: "{{tokenStrong}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.result
+      operator: eq
+      value: "win"
+    - expression: res.body.reward_status
+      operator: eq
+      value: "applied"
+
+settings:
+  encodeUrl: true

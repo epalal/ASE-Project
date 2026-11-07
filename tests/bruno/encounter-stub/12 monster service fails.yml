@@ -1,0 +1,27 @@
+info:
+  name: monster service fails
+  type: http
+  seq: 12
+
+http:
+  method: PUT
+  url: "{{encounterUrl}}/team"
+  body:
+    type: json
+    data: |-
+      {"monster_ids": ["101", "105", "109"]}
+  auth:
+    type: bearer
+    token: "{{token500}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "502"
+    - expression: res.body.error
+      operator: eq
+      value: "monster_service_unavailable"
+
+settings:
+  encodeUrl: true

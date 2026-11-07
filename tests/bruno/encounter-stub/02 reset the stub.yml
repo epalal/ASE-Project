@@ -1,0 +1,17 @@
+info:
+  name: reset the stub
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{monsterStubUrl}}/__reset"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "204"
+
+settings:
+  encodeUrl: true

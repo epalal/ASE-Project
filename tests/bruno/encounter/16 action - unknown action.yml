@@ -1,0 +1,27 @@
+info:
+  name: action - unknown action
+  type: http
+  seq: 16
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{encounterId}}/action"
+  body:
+    type: json
+    data: |-
+      {"action": "dance"}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+    - expression: res.body.error
+      operator: eq
+      value: "invalid_input"
+
+settings:
+  encodeUrl: true

@@ -1,0 +1,32 @@
+info:
+  name: attack
+  type: http
+  seq: 23
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{ownedEncounterId}}/action"
+  body:
+    type: json
+    data: |-
+      {"action": "attack"}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.status
+      operator: eq
+      value: "closed"
+    - expression: res.body.action
+      operator: eq
+      value: "attack"
+    - expression: res.body.roll
+      operator: isNumber
+
+settings:
+  encodeUrl: true

@@ -1,0 +1,15 @@
+opencollection: 1.0.0
+
+info:
+  name: Monster Tamers
+  version: "1"
+
+docs:
+  content: "One folder per service and one per stub. <service>-component environments: one service with stubs of what it calls (compose.<service>.yaml). integration: the whole stack through the gateway. See README.md."
+  type: text/markdown
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

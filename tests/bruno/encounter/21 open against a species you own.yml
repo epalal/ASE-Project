@@ -1,0 +1,30 @@
+info:
+  name: open against a species you own
+  type: http
+  seq: 21
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": 9}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("ownedEncounterId", res.body.id);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "201"
+    - expression: res.body.p_capture
+      operator: isNull
+
+settings:
+  encodeUrl: true

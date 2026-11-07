@@ -1,0 +1,27 @@
+info:
+  name: save team - monster not owned
+  type: http
+  seq: 8
+
+http:
+  method: PUT
+  url: "{{encounterUrl}}/team"
+  body:
+    type: json
+    data: |-
+      {"monster_ids": ["101", "105", "999"]}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+    - expression: res.body.error
+      operator: eq
+      value: "not_owned"
+
+settings:
+  encodeUrl: true

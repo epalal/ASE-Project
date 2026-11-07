@@ -1,0 +1,38 @@
+info:
+  name: stub received the stats reward
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{monsterStubUrl}}/__calls"
+
+runtime:
+  assertions:
+    - expression: res.body
+      operator: length
+      value: "4"
+    - expression: res.body[3].method
+      operator: eq
+      value: "POST"
+    - expression: res.body[3].path
+      operator: eq
+      value: "/internal/rewards"
+    - expression: res.body[3].json.encounter_id
+      operator: eq
+      value: "{{strongEncounterId}}"
+    - expression: res.body[3].json.player_id
+      operator: eq
+      value: "stub-strong"
+    - expression: res.body[3].json.owned_monster_ids
+      operator: length
+      value: "3"
+    - expression: res.body[3].json.atk_bonus
+      operator: eq
+      value: "1"
+    - expression: res.body[3].json.hp_bonus
+      operator: eq
+      value: "1"
+
+settings:
+  encodeUrl: true

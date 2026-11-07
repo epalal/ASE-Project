@@ -1,0 +1,27 @@
+info:
+  name: act twice
+  type: http
+  seq: 20
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{encounterId}}/action"
+  body:
+    type: json
+    data: |-
+      {"action": "attack"}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "409"
+    - expression: res.body.error
+      operator: eq
+      value: "encounter_closed"
+
+settings:
+  encodeUrl: true

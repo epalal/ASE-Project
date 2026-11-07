@@ -1,0 +1,31 @@
+info:
+  name: open against Cindrake
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": 11}
+  auth:
+    type: bearer
+    token: "{{tokenStrong}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("strongEncounterId", res.body.id);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "201"
+    - expression: res.body.p_win
+      operator: eq
+      value: "1"
+
+settings:
+  encodeUrl: true

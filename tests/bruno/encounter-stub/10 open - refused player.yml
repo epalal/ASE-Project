@@ -1,0 +1,28 @@
+info:
+  name: open - refused player
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": 11}
+  auth:
+    type: bearer
+    token: "{{tokenRefuse}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("refusedEncounterId", res.body.id);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "201"
+
+settings:
+  encodeUrl: true

@@ -187,6 +187,12 @@ class Game:
             f"/encounters/{encounter_id}/action", json={"action": action}, headers=self._token_for(player_id)
         )
 
+    def history(self, player_id):
+        return self._client.get("/encounters", headers=self._token_for(player_id))
+
+    def show(self, player_id, encounter_id):
+        return self._client.get(f"/encounters/{encounter_id}", headers=self._token_for(player_id))
+
 
 @pytest.fixture
 def game(client, token_for, monster_service):

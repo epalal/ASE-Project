@@ -5,7 +5,6 @@ from flask import Flask, jsonify, request
 app = Flask(__name__)
 
 AUTH_URL = os.environ.get("AUTH_URL", "http://localhost:5001").rstrip("/")
-GAME_URL = os.environ.get("GAME_URL", "http://localhost:5002").rstrip("/")
 REQUEST_TIMEOUT = 3
 
 def error(code, message, status=400):
@@ -65,26 +64,6 @@ def proxy_login():
         return failure
     return jsonify(data), 200
 
-@app.get("/statistics")
-def proxy_statistics():
-    username = request.args.get('username')
-    auth_header = request.headers.get('Authorization')
-    
-    if not username:
-        return error("invalid_request", "Missing username", 400)
-    
-    payload = {
-        "operation_type": "enter_game",
-        "arguments": [username]
-    }
-    
-    headers = {"Authorization": auth_header} if auth_header else {}
-    data, failure = forward("POST", f"{GAME_URL}/statistics", json=payload, headers=headers)
-    
-    if failure is not None:
-        return failure
-    return jsonify(data), 200
-
 @app.get("/")
 def home():
     return '''
@@ -126,12 +105,6 @@ def home():
                 <button type="submit" class="btn-blue">Access</button>
             </form>
             <div id="login-result" class="result"></div>
-        </div>
-
-        <div class="card">
-            <h2>Welcome</h2>
-            <button id="viewGame" class="btn-blue">Show progress and Monsters</button>
-            <div id="game-result" class="result"></div>
         </div>
 
         <script>
@@ -184,26 +157,6 @@ def home():
                 }
             });
 
-            document.getElementById('viewGame').addEventListener('click', async function() {
-                if (!loggedInUser || !authToken) {
-                    alert("You have to login first.");
-                    return;
-                }
-
-                const response = await fetch(`/statistics?username=${loggedInUser}`, {
-                    headers: { 'Authorization': authToken }
-                });
-                const data = await response.json();
-                const resultDiv = document.getElementById('game-result');
-                if (response.ok) {
-                    resultDiv.style.color = 'green';
-                    resultDiv.innerText = `Progress: Level ${data.progress.level}, Experience ${data.progress.experience}\\n` +
-                                        'Characters: ' + data.characters.map(c => c.name).join(', ');
-                } else {
-                    resultDiv.style.color = 'red';
-                    resultDiv.innerText = 'Error: ' + (data.message || data.error);
-                }
-            });
         </script>
     </body>
     </html>

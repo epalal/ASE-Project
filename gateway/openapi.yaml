@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: ASE Operations API
   version: 1.0.0
-  description: Gateway API to connect user services and game services
+  description: Gateway API to connect user services
 servers:
 - url: http://localhost:5005
 paths:
@@ -86,63 +86,6 @@ paths:
                     type: string
         '400':
           description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '502':
-          description: Upstream service error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /statistics:
-    get:
-      summary: Access game data
-      description: Retrieves game progress and characters for the logged-in user.
-      operationId: GameData
-      parameters:
-        - name: username
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: Authorization
-          in: header
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Game data retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  progress:
-                    type: object
-                    properties:
-                      level:
-                        type: integer
-                      experience:
-                        type: integer
-                  characters:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
           content:
             application/json:
               schema:

@@ -1,5 +1,6 @@
 """Encounters: POST /encounters opens one (US-18), and
-POST /encounters/{id}/action plays it with attack, capture or escape (US-19, US-21, US-22)."""
+POST /encounters/{id}/action plays it with attack, capture or escape (US-19, US-21, US-22).
+GET /encounters and GET /encounters/{id} are the player's history (US-23, US-24)."""
 
 import uuid
 from dataclasses import asdict
@@ -18,6 +19,7 @@ encounters_bp = Blueprint("encounters", __name__)
 
 MAX_DB_INTEGER = 2**31 - 1  # the largest integer the database column stores
 INVALID_ACTION = 'Send {"action": "attack"}, {"action": "capture"} or {"action": "escape"}.'
+HISTORY_LIMIT = 50  # the newest encounters only, so the answer stays small after thousands of games
 
 
 def _challenge_id_from(body):
@@ -44,6 +46,15 @@ def _closing(action, outcome, at):
     return {"status": "closed", "action": action, "roll": outcome.roll, "result": outcome.result, "closed_at": at}
 
 
+def _utc_text(moment):
+    """ISO 8601 in UTC. SQLite gives the time back without its time zone, so it is added again."""
+    if moment is None:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).isoformat()
+
+
 def _as_json(encounter):
     return {
         "id": encounter.id,
@@ -56,6 +67,8 @@ def _as_json(encounter):
         "roll": encounter.roll,
         "result": encounter.result,
         "reward_status": encounter.reward_status,
+        "created_at": _utc_text(encounter.created_at),
+        "closed_at": _utc_text(encounter.closed_at),
     }
 
 
@@ -112,15 +125,49 @@ def open_encounter():
     return jsonify(_as_json(encounter)), 201
 
 
+@encounters_bp.get("/encounters")
+@require_player
+def history():
+    encounters = (
+        Encounter.query.filter_by(player_id=g.player_id, status="closed")
+        .order_by(Encounter.created_at.desc())
+        .limit(HISTORY_LIMIT)
+        .all()
+    )
+    return jsonify(encounters=[_as_json(encounter) for encounter in encounters])
+
+
+def _players_encounter(encounter_id):
+    """The player's own encounter, or None. Another player's encounter counts as
+    missing too, so the answer gives no hint about which IDs exist."""
+    encounter = db.session.get(Encounter, encounter_id)
+    if encounter is None or encounter.player_id != g.player_id:
+        return None
+    return encounter
+
+
+def _encounter_not_found():
+    return error("encounter_not_found", "There is no encounter with this ID.", 404)
+
+
+@encounters_bp.get("/encounters/<encounter_id>")
+@require_player
+def show_encounter(encounter_id):
+    encounter = _players_encounter(encounter_id)
+    if encounter is None:
+        return _encounter_not_found()
+    return jsonify(_as_json(encounter))
+
+
 @encounters_bp.post("/encounters/<encounter_id>/action")
 @require_player
 def choose_action(encounter_id):
     action = _action_from(request.get_json(silent=True))
     if action is None:
         return error("invalid_input", INVALID_ACTION, 400)
-    encounter = db.session.get(Encounter, encounter_id)
-    if encounter is None or encounter.player_id != g.player_id:  # 404 even if it exists: no hint for attackers
-        return error("encounter_not_found", "There is no encounter with this ID.", 404)
+    encounter = _players_encounter(encounter_id)
+    if encounter is None:
+        return _encounter_not_found()
     if encounter.status == "closed":
         return error("encounter_closed", "This encounter is already over.", 409)
 

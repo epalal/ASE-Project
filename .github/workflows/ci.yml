@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 # Runs the tests of every service at each push and pull request (Lab 7).
 # A failing test turns the run red. To add a service, add its name to the matrix:
 #   unit:       a folder with requirements-dev.txt and its pytest tests
@@ -53,12 +54,32 @@ jobs:
 
       - name: Set up Node
         uses: actions/setup-node@v7
+=======
+name: CI Monster Service
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  component-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node for Bruno
+        uses: actions/setup-node@v4
+>>>>>>> Stashed changes
         with:
           node-version: 22
 
       - name: Install the Bruno CLI
         run: npm install -g @usebruno/cli@4.3.0
 
+<<<<<<< Updated upstream
       # Every value in .env.example gets a new random value, used only by this run.
       - name: Make throwaway secrets for this run
         run: |
@@ -84,3 +105,21 @@ jobs:
       - name: Stop the service
         if: always()
         run: docker compose -f compose.${{ matrix.service }}.yaml down -v
+=======
+      - name: Start monster_service database and API
+        # Start the monster_service stack in detached mode and wait for it to be ready
+        run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait
+
+      - name: Run Component Tests with Bruno
+        working-directory: monster_service/tests/bruno
+        # Execute the Bruno CLI to run the component tests for the monster_service, using the local-component environment
+        run: bru run monsters --env local-component
+
+      - name: Show logs if failure
+        if: failure()
+        run: docker compose -f monster_service/docker-compose.yaml logs
+
+      - name: Stop stack
+        if: always()
+        run: docker compose -f monster_service/docker-compose.yaml down
+>>>>>>> Stashed changes

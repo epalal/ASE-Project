@@ -1,25 +1,18 @@
+include:
+  - tls_init/compose.yaml
+  - encounter_service/compose.yaml
 services:
-  tls-init:
-    build:
-      context: ./tls-init
-    container_name: tls-init
-    entrypoint: ["python", "tls-init.py"]
-    environment:
-      TLS_OUT: /tls
-    volumes:
-      - ./tls:/tls
-    restart: "no"
-
   gateway:
     build: ./gateway
-    container_name: api_gateway
     ports:
       - "127.0.0.1:5005:5005"
     environment:
-      AUTH_URL: https://auth_service:5001
-      ENCOUNTER_URL: https://monster_service:5003
+      AUTH_URL: https://player-service:5001
+      ENCOUNTER_URL: https://encounter-service:5003
     depends_on:
-      auth_service:
+      player-service:
+        condition: service_healthy
+      encounter-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5005/health', timeout=2)"]
@@ -29,30 +22,42 @@ services:
       start_period: 5s
 
   player-service:
-    build: ./auth_service
-    container_name: auth_service
+    build: ./player_service
+    container_name: player-service
+    environment:
+      DATABASE_URL: sqlite:////data/player_db.sqlite3
     volumes:
-      - ./data:/app/data
-      - ./private.pem:/app/keys/private.pem:ro
-      - ./public.pem:/app/keys/public.pem:ro
+      - player-service-certs:/certs:ro
+      - player-db-data:/data
+    group_add:
+      - "10000"
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5001/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
 
-  encounter-service:
-    build: ./encounter_service
-    container_name: encounter_service
+  monster-service:
+    build: ./monster_stub
+    group_add:
+      - "10000"
+    environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it in .env}
     volumes:
-      - ./data:/app/data
+      - monster-service-certs:/certs:ro
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5003/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5002/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
 
 volumes:
-  shared-data:
+  player-db-data:

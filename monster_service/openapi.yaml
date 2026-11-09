@@ -51,7 +51,7 @@ components:
           example: 2
         image_url:
           type: string
-          example: /assets/monsters/emberbun.png
+          example: /assets/monsters/Monster collection_1.jpeg
 
     OwnedMonster:
       type: object

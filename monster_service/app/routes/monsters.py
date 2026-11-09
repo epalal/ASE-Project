@@ -1,4 +1,5 @@
-from flask import Blueprint, jsonify, request, g
+import os
+from flask import Blueprint, jsonify, request, g, send_from_directory, current_app
 from sqlalchemy.exc import IntegrityError
 from ..models import db, MonsterCatalog, PlayerMonster
 from ..initial_monsters import STARTER_MONSTER_IDS
@@ -41,6 +42,13 @@ def get_monster_detail(monster_id):
     if not monster:
         return jsonify({"error": "Monster not found"}), 404
     return jsonify(monster.to_dict()), 200
+
+# US-11: Serve monster images from the static assets directory (safer implementation for accessing images)
+@monsters_bp.route('/assets/monsters/<path:filename>', methods=['GET'])
+def serve_monster_images(filename):
+    """Serve monster images from the static assets directory."""
+    images_dir = os.path.join(current_app.root_path, 'static', 'assets', 'monsters')
+    return send_from_directory(images_dir, filename)
 
 # US-06 & US-09: Get player's monster collection
 @monsters_bp.route('/collection', methods=['GET'])

@@ -26,8 +26,7 @@ jobs:
         run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait
 
       - name: Run Component Tests with Bruno
-        working-directory: monster_service/tests/bruno
-        run: bru run monsters --env local-component
+        run: bru run "monster_service/tests/bruno 1" --env local-component
 
       - name: Show logs if failure
         if: failure()

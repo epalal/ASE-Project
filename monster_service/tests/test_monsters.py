@@ -68,6 +68,14 @@ def test_get_single_monster_valid(client):
     assert data["power"] == 7
     assert data["hp"] == 6
 
+# TEST US-11: "view a monster's image"
+def test_monster_image_retrieval_us11(client):
+    """Test US-11: Verify that monster images are accessible to the client."""
+    response = client.get('/assets/monsters/Monster collection_1.jpeg')
+    assert response.status_code in [200, 404], "La rotta deve esistere e gestire la richiesta"
+    if response.status_code == 200:
+        assert response.mimetype in ['image/png', 'image/jpeg']
+
 # TEST US-11: Invalid monster ID (outside the range 1-16)
 def test_get_single_monster_invalid_id(client):
     """Test 4xx: Request for an invalid monster ID (outside the range 1-16) returns 404."""

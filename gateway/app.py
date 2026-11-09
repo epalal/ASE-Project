@@ -6,6 +6,7 @@ app = Flask(__name__)
 
 AUTH_URL = os.environ.get("AUTH_URL", "http://localhost:5001").rstrip("/")
 MONSTER_URL = os.environ.get("MONSTER_URL", "http://localhost:5002").rstrip("/")
+ENCOUNTER_URL = os.environ.get("ENCOUNTER_URL", "https://encounter-service:5003").rstrip("/")
 REQUEST_TIMEOUT = 3
 
 def error(code, message, status=400):
@@ -71,7 +72,7 @@ def proxy_get_team():
     if "Authorization" in request.headers:
         headers["Authorization"] = request.headers["Authorization"]
 
-    data, failure = forward("GET", f"{MONSTER_URL}/team", headers=headers)
+    data, failure = forward("GET", f"{ENCOUNTER_URL}/team", headers=headers)
     if failure is not None:
         return failure
     return jsonify(data), 200
@@ -87,7 +88,7 @@ def proxy_put_team():
     if "Authorization" in request.headers:
         headers["Authorization"] = request.headers["Authorization"]
 
-    data, failure = forward("PUT", f"{MONSTER_URL}/team", json=body, headers=headers)
+    data, failure = forward("PUT", f"{ENCOUNTER_URL}/team", json=body, headers=headers)
     if failure is not None:
         return failure
     return jsonify(data), 200
@@ -98,7 +99,7 @@ def proxy_get_challenges():
     if "Authorization" in request.headers:
         headers["Authorization"] = request.headers["Authorization"]
 
-    data, failure = forward("GET", f"{MONSTER_URL}/challenges", headers=headers)
+    data, failure = forward("GET", f"{ENCOUNTER_URL}/challenges", headers=headers)
     if failure is not None:
         return failure
     return jsonify(data), 200
@@ -114,7 +115,7 @@ def proxy_post_encounters():
     if "Authorization" in request.headers:
         headers["Authorization"] = request.headers["Authorization"]
 
-    data, failure = forward("POST", f"{MONSTER_URL}/encounters", json=body, headers=headers)
+    data, failure = forward("POST", f"{ENCOUNTER_URL}/encounters", json=body, headers=headers)
     if failure is not None:
         return failure
     return jsonify(data), 201
@@ -130,10 +131,71 @@ def proxy_post_encounter_action(encounter_id):
     if "Authorization" in request.headers:
         headers["Authorization"] = request.headers["Authorization"]
 
-    data, failure = forward("POST", f"{MONSTER_URL}/encounters/{encounter_id}/action", json=body, headers=headers)
+    data, failure = forward("POST", f"{ENCOUNTER_URL}/encounters/{encounter_id}/action", json=body, headers=headers)
     if failure is not None:
         return failure
     return jsonify(data), 200
+
+@app.get("/monsters")
+def proxy_get_monsters():
+    """Returns the complete catalog of the 16 monsters (US-10)."""
+    data, failure = forward("GET", f"{MONSTER_URL}/monsters")
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+
+@app.get("/monsters/<int:monster_id>")
+def proxy_get_monster_details(monster_id):
+    """Returns the details of a specific monster (US-11)."""
+    data, failure = forward("GET", f"{MONSTER_URL}/monsters/{monster_id}")
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+
+@app.get("/collection")
+def proxy_get_collection():
+    """Returns the player's collection and performs Lazy Init on the first access (US-06, US-09)."""
+    headers = {}
+    if "Authorization" in request.headers:
+        headers["Authorization"] = request.headers["Authorization"]
+
+    data, failure = forward("GET", f"{MONSTER_URL}/collection", headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+
+@app.get("/internal/players/<string:player_id>/team")
+def proxy_get_player_team(player_id):
+    """Returns the player's team and owned species IDs (C9)."""
+    headers = {}
+    if "X-Internal-Secret" in request.headers:
+        headers["X-Internal-Secret"] = request.headers["X-Internal-Secret"]
+
+    data, failure = forward("GET", f"{MONSTER_URL}/internal/players/{player_id}/team", headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+
+@app.post("/internal/rewards")
+def proxy_post_rewards():
+    """Applies a stats or capture reward from the Encounter service (C10)."""
+    try:
+        body = require_json_body()
+    except ValueError as exc:
+        return error("invalid_request", str(exc))
+
+    headers = {}
+    if "X-Internal-Secret" in request.headers:
+        headers["X-Internal-Secret"] = request.headers["X-Internal-Secret"]
+
+    data, failure = forward("POST", f"{MONSTER_URL}/internal/rewards", json=body, headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 201
 
 @app.get("/health")
 def health():

@@ -1,23 +1,34 @@
 services:
+  tls-init:
+    build:
+      context: ./tls-init
+    container_name: tls-init
+    entrypoint: ["python", "tls-init.py"]
+    environment:
+      TLS_OUT: /tls
+    volumes:
+      - ./tls:/tls
+    restart: "no"
+
   gateway:
     build: ./gateway
     container_name: api_gateway
     ports:
       - "127.0.0.1:5005:5005"
     environment:
-      AUTH_URL: http://auth_service:5001
-      MONSTER_URL: http://monster_service:5002
+      AUTH_URL: https://auth_service:5001
+      ENCOUNTER_URL: https://monster_service:5003
     depends_on:
       auth_service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5005/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5005/health', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
 
-  auth_service:
+  player-service:
     build: ./auth_service
     container_name: auth_service
     volumes:
@@ -25,31 +36,23 @@ services:
       - ./private.pem:/app/keys/private.pem:ro
       - ./public.pem:/app/keys/public.pem:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5001/health', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
 
-  monster_service:
-    build: ./monster_service
-    container_name: monster_service
+  encounter-service:
+    build: ./encounter_service
+    container_name: encounter_service
     volumes:
       - ./data:/app/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5002/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5003/health', timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
-
-  monster:
-    build: ./monster_service
-    container_name: monster_service
-    environment:
-      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?INTERNAL_SERVICE_SECRET must be set}
-    expose:
-      - "5002"
 
 volumes:
   shared-data:

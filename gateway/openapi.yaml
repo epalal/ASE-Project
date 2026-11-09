@@ -330,6 +330,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /monsters:
+    get:
+      summary: Get all monsters
+      description: Retrieves the complete catalog of monsters.
+      operationId: getMonsters
+      responses:
+        '200':
+          description: Monsters retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Monster'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /monsters/{monster_id}:
+    get:
+      summary: Get monster details
+      description: Retrieves details of a specific monster.
+      operationId: getMonsterDetails
+      parameters:
+        - in: path
+          name: monster_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Monster details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monster'
+        '404':
+          description: Monster not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /health:
     get:
       summary: Gateway liveness check

@@ -17,8 +17,8 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DATA_FILE = os.path.join(DATA_DIR, "users_data.json")
 SESSION_FILE = os.path.join(DATA_DIR, "session_tokens.json")
 
-PRIVATE_KEY_PATH = os.path.join(BASE_DIR, "keys", "private.pem")
-PUBLIC_KEY_PATH = os.path.join(BASE_DIR, "keys", "public.pem")
+PRIVATE_KEY_PATH = os.path.join(BASE_DIR, "certs", "jwt_private.pem")
+PUBLIC_KEY_PATH = os.path.join(BASE_DIR, "certs", "jwt_public.pem")
 
 with open(PRIVATE_KEY_PATH, 'r') as f:
     PRIVATE_KEY = f.read()
@@ -160,9 +160,11 @@ def login():
 
         token = jwt.encode(
             {
-                "username": username,
-                "id": user["id"],
-                "exp": int(time.time()) + 3600
+                "sub": user["id"], 
+                "aud": "monster-tamers", 
+                "iss": "player-service",
+                "exp": int(time.time()) + 3600,
+                "username": username
             },
             PRIVATE_KEY,
             algorithm="RS256"

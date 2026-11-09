@@ -41,19 +41,43 @@ services:
       retries: 10
       start_period: 5s
 
-  monster-service:
-    build: ./monster_stub
+    encounter-service:
+    build: ./encounter_service
+    container_name: encounter-service
     group_add:
       - "10000"
     environment:
-      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it in .env}
+      ENCOUNTER_URL: https://encounter-service:5003
+      POSTGRES_DB: encounter_db
+      POSTGRES_USER: encounter_app
+      POSTGRES_PASSWORD: your_password_here
+      POSTGRES_HOST: encounter-db
     volumes:
-      - monster-service-certs:/certs:ro
+      - encounter-service-certs:/certs:ro
     depends_on:
       tls-init:
         condition: service_completed_successfully
+      encounter-db:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5002/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5003/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  encounter-db:
+    image: postgres:15
+    container_name: encounter-db
+    environment:
+      POSTGRES_DB: encounter_db
+      POSTGRES_USER: encounter_app
+      POSTGRES_PASSWORD: your_password_here
+      ENCOUNTER_DB_PASSWORD: your_password_here
+    volumes:
+      - encounter-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -61,3 +85,4 @@ services:
 
 volumes:
   player-db-data:
+  encounter-db-data:

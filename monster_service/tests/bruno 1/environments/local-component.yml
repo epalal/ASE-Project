@@ -1,11 +1,8 @@
 name: local-component
 variables:
   - name: monsterUrl
-    value: https://localhost:5002
-    description: ""
+    value: http://localhost:5002
   - name: internalSecret
     value: test-internal-secret-key
-    description: ""
   - name: testToken
     value: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0X3BsYXllcl8wMSJ9.r6ZDl-ti4t_7jbuLmnA7WX8OO6UWtC7rJPEIq_D2Hoojk02s2FqS1EGa7j54eamknYmibR4OaXP7QfKtNLzMdNIUXGeE0nawuglKikPdaine8nzsYwZXBL3H96BwyxR31lWYQVpdViqgAiF8K_saAJvS7jYoQl4d_YV2rAfX1B0-57iCOjno8J2I9GC5-Z2L8EOPFmpkG-mXQvgVW5U8Pkrx8lpKvnvxW5Y-6DvSalr3BBkDykctDZwVYN0jyFv7jKvZHJpxw8bk6keTEqZVn6LBdyq9l9gddyB8j62zxweo4SS7DTl_UW-NPMy6NMQ3j-QrGZW45B1z9QoFvdmFNg
-    description: ""

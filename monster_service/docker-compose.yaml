@@ -8,11 +8,12 @@ services:
     volumes:
       - ./certs:/certs:ro
     environment:
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@monster_db:5432/monster_db
-      - INTERNAL_SERVICE_SECRET=test-internal-secret-key
-      - JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY----- 
-       eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0X3BsYXllcl8wMSJ9.r6ZDl-ti4t_7jbuLmnA7WX8OO6UWtC7rJPEIq_D2Hoojk02s2FqS1EGa7j54eamknYmibR4OaXP7QfKtNLzMdNIUXGeE0nawuglKikPdaine8nzsYwZXBL3H96BwyxR31lWYQVpdViqgAiF8K_saAJvS7jYoQl4d_YV2rAfX1B0-57iCOjno8J2I9GC5-Z2L8EOPFmpkG-mXQvgVW5U8Pkrx8lpKvnvxW5Y-6DvSalr3BBkDykctDZwVYN0jyFv7jKvZHJpxw8bk6keTEqZVn6LBdyq9l9gddyB8j62zxweo4SS7DTl_UW-NPMy6NMQ3j-QrGZW45B1z9QoFvdmFNg 
-       -----END PUBLIC KEY-----
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@monster_db:5432/monster_db
+      INTERNAL_SERVICE_SECRET: test-internal-secret-key
+      JWT_PUBLIC_KEY: |
+        -----BEGIN PUBLIC KEY-----
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg+BRGw+Ra7kdDy5fJdDjXVFqnS+1NrdGvt99wNpCbe51aA6awV1gG4HV3/p1Fj29iKFWXORtqNLlcWNay1uGeCVd/9KlTdIBkYUGcE2e0F44Qnxcm3/X9eJ51iPAQ0xPad+SDxSlVPlfK1PDUkfFKCoqJN2gMBVsQXJGBILXvBytxv4jk9Klmu6a1TIRhEanDUez+SeOVvtn4k5fVAW/PuFzp+cUoncUf4gq9CjxxANgThDYQrSoBzAAbRCuvda6c52YNz1Qos3IdU6XlchbOedF8SMRAFWP1xpoZZTcmWcCKwWGZ9JSAak/G1PGDUXoAiv8aFom/yVdIOPWv0cgUwIDAQAB
+        -----END PUBLIC KEY-----
     depends_on:
       monster_db:
         condition: service_healthy

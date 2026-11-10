@@ -1,7 +1,7 @@
 import os
 from flask import Blueprint, jsonify, request, g, send_from_directory, current_app
 from sqlalchemy.exc import IntegrityError
-from ..models import db, MonsterCatalog, PlayerMonster
+from ..models import AppliedReward, db, MonsterCatalog, PlayerMonster
 from ..initial_monsters import STARTER_MONSTER_IDS
 from ..auth import require_jwt, require_internal_secret
 
@@ -9,22 +9,18 @@ monsters_bp = Blueprint('monsters', __name__)
 
 # US-06: Initialization of starter monsters for a player
 def get_starter_monsters(player_id: str):
-    """Assign initial monsters"""
     owned = PlayerMonster.query.filter_by(player_id=player_id).all()
     if not owned:
-        new_monsters = []
-        for m_id in STARTER_MONSTER_IDS:
-            monster = db.session.get(MonsterCatalog, m_id)
-            pm = PlayerMonster(
-                player_id=player_id,
-                monster_id=m_id,
-                atk=monster.power,
-                hp=monster.hp,
-            )
-            db.session.add(pm)
-            new_monsters.append(pm)
-        db.session.commit()
-        return new_monsters
+        try:
+            for m_id in STARTER_MONSTER_IDS:
+                catalog_item = db.session.get(MonsterCatalog, m_id)
+                if catalog_item:
+                    pm = PlayerMonster(player_id=player_id, monster_id=m_id, atk=catalog_item.power, hp=catalog_item.hp)
+                    db.session.add(pm)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+        owned = PlayerMonster.query.filter_by(player_id=player_id).all()
     return owned
 
 # US-10: Full catalog of monsters
@@ -62,91 +58,15 @@ def get_player_collection():
         "collection": [pm.to_dict() for pm in owned_monsters]
     }), 200
 
-# US-07: Read the player's current team
-@monsters_bp.route('/team', methods=['GET'])
-@require_jwt
-def get_team():
-    player_id = g.player_id
-    get_starter_monsters(player_id)
-    team_members = (
-        PlayerMonster.query
-        .filter(
-            PlayerMonster.player_id == player_id,
-            PlayerMonster.team_slot.is_not(None),
-        )
-        .order_by(PlayerMonster.team_slot.asc())
-        .all()
-    )
-    return jsonify({
-        "player_id": player_id,
-        "team": [monster.to_dict() for monster in team_members],
-    }), 200
-
-# US-07: Save exactly three distinct owned monsters as the player's team
-@monsters_bp.route('/team', methods=['PUT'])
-@require_jwt
-def update_team():
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
-
-    owned_monster_ids = data.get("owned_monster_ids")
-    if (
-        not isinstance(owned_monster_ids, list)
-        or len(owned_monster_ids) != 3
-        or any(
-            not isinstance(monster_id, int) or isinstance(monster_id, bool)
-            for monster_id in owned_monster_ids
-        )
-        or len(set(owned_monster_ids)) != 3
-    ):
-        return jsonify({
-            "error": "owned_monster_ids must contain exactly 3 distinct monster ownership IDs"
-        }), 400
-
-    player_id = g.player_id
-    get_starter_monsters(player_id)
-    owned_monsters = PlayerMonster.query.filter(
-        PlayerMonster.player_id == player_id,
-        PlayerMonster.id.in_(owned_monster_ids),
-    ).all()
-    monsters_by_id = {monster.id: monster for monster in owned_monsters}
-    if len(monsters_by_id) != 3:
-        return jsonify({
-            "error": "All team monsters must belong to the authenticated player"
-        }), 400
-
-    PlayerMonster.query.filter_by(player_id=player_id).update(
-        {"team_slot": None},
-        synchronize_session=False,
-    )
-    for slot, ownership_id in enumerate(owned_monster_ids, start=1):
-        monsters_by_id[ownership_id].team_slot = slot
-    db.session.commit()
-
-    return jsonify({
-        "player_id": player_id,
-        "team": [monsters_by_id[ownership_id].to_dict() for ownership_id in owned_monster_ids],
-    }), 200
-
-# C9: Return the player's team and species available for capture
-@monsters_bp.route('/internal/players/<player_id>/team', methods=['GET'])
+# C9: Return the player's collection to the Encounter service
+@monsters_bp.route('/internal/players/<player_id>/monsters', methods=['GET'])
 @require_internal_secret
-def get_player_team(player_id):
+def get_player_monsters(player_id):
     owned_monsters = get_starter_monsters(player_id)
-    team_members = (
-        PlayerMonster.query
-        .filter(
-            PlayerMonster.player_id == player_id,
-            PlayerMonster.team_slot.is_not(None),
-        )
-        .order_by(PlayerMonster.team_slot.asc())
-        .all()
-    )
     return jsonify({
         "player_id": player_id,
-        "team": [monster.to_dict() for monster in team_members],
-        "owned_species_ids": [monster.monster_id for monster in owned_monsters],
+        "count": len(owned_monsters),
+        "collection": [monster.to_dict() for monster in owned_monsters],
     }), 200
 
 # C10: Apply encounter rewards from the Encounter service
@@ -162,7 +82,7 @@ def grant_reward():
     if not player_id or not encounter_id:
         return jsonify({"error": "player_id and encounter_id are required"}), 400
 
-    if PlayerMonster.query.filter_by(reward_encounter_id=encounter_id).first():
+    if db.session.get(AppliedReward, encounter_id):
         return jsonify({"message": "Reward for this encounter has already been granted"}), 200
 
     has_stats = "owned_monster_ids" in data
@@ -198,6 +118,7 @@ def grant_reward():
             for owned_monster in owned_monsters:
                 owned_monster.atk = min(owned_monster.atk + atk_bonus, owned_monster.monster.power + 3)
                 owned_monster.hp = min(owned_monster.hp + hp_bonus, owned_monster.monster.hp + 3)
+            db.session.add(AppliedReward(encounter_id=encounter_id))
             db.session.commit()
             return jsonify({
                 "message": "Monster stats updated successfully",
@@ -221,12 +142,14 @@ def grant_reward():
             monster_id=captured_species_id,
             atk=catalog_monster.power,
             hp=catalog_monster.hp,
-            reward_encounter_id=encounter_id,
         )
         db.session.add(new_reward)
+        db.session.add(AppliedReward(encounter_id=encounter_id))
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
+        if db.session.get(AppliedReward, encounter_id):
+            return jsonify({"message": "Reward for this encounter has already been granted"}), 200
         return jsonify({"error": "Conflict in reward assignment"}), 409
 
     return jsonify({

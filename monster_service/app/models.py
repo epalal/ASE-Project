@@ -27,7 +27,6 @@ class PlayerMonster(db.Model):
     __tablename__ = 'player_monsters'
     __table_args__ = (
         db.UniqueConstraint('player_id', 'monster_id', name='uq_player_monster'),
-        db.UniqueConstraint('player_id', 'team_slot', name='uq_player_team_slot'),
     )
     
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -35,9 +34,7 @@ class PlayerMonster(db.Model):
     monster_id = db.Column(db.Integer, db.ForeignKey('monster_catalog.id'), nullable=False)
     atk = db.Column(db.Integer, nullable=False)
     hp = db.Column(db.Integer, nullable=False)
-    team_slot = db.Column(db.Integer, nullable=True)
     acquired_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    reward_encounter_id = db.Column(db.String(64), unique=True, nullable=True)
 
     monster = db.relationship('MonsterCatalog', lazy='joined')
 
@@ -50,3 +47,9 @@ class PlayerMonster(db.Model):
             "hp": self.hp,
             "monster": self.monster.to_dict()
         }
+
+class AppliedReward(db.Model):
+    __tablename__ = 'applied_rewards'
+
+    encounter_id = db.Column(db.String(64), primary_key=True)
+    applied_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

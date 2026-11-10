@@ -14,8 +14,8 @@ http:
     data: |-
       {
         "player_id": "test_player_01",
-        "monster_id": 11,
-        "encounter_id": "enc_999"
+        "encounter_id": "enc_999",
+        "captured_species_id": 11
       }
 
 settings:

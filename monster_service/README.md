@@ -2,8 +2,8 @@
 
 The `monster_service` directory contains the Monster Service microservice of the
 ASE project. It is a Flask application that owns the global monster catalogue,
-creates and stores each player's collection, manages the player's three-monster
-team, serves monster artwork, and receives rewards from the Encounter Service.
+creates and stores each player's collection, serves monster artwork, and
+receives rewards from the Encounter Service.
 
 The service exposes a JSON HTTP API and persists its data with SQLAlchemy. In a
 containerized deployment it runs behind Gunicorn on port `5002` and connects to
@@ -16,11 +16,9 @@ The service is responsible for:
 - maintaining the catalogue of 16 monsters;
 - returning catalogue entries and individual monster details;
 - lazily assigning three starter monsters to a player on the first collection
-  or team request;
+  request;
 - storing player-specific attack (`atk`) and health (`hp`) values;
-- allowing an authenticated player to select exactly three owned monsters as a
-  team;
-- exposing an internal team snapshot for other services;
+- exposing an internal collection endpoint for other services;
 - applying encounter rewards:
   - stat bonuses to one or more owned monsters; or
   - a newly captured catalogue species;
@@ -40,7 +38,7 @@ monster_service/
 │   ├── initial_monsters.py      # Catalogue seed data and starter IDs
 │   ├── models.py                # SQLAlchemy models and serializers
 │   ├── routes/
-│   │   └── monsters.py          # Catalogue, collection, team and reward routes
+│   │   └── monsters.py          # Catalogue, collection and reward routes
 │   └── static/
 │       └── assets/monsters/     # Monster artwork
 ├── tests/
@@ -94,12 +92,14 @@ Represents one monster owned by a player:
 - `player_id`: identifier of the owning player;
 - `monster_id`: foreign key to `MonsterCatalog`;
 - `atk` and `hp`: player-specific values;
-- `team_slot`: nullable team position from 1 to 3;
 - `acquired_at`: UTC acquisition timestamp;
-- `reward_encounter_id`: unique encounter identifier for reward idempotency.
 
-The database prevents a player from owning the same species more than once and
-prevents two owned monsters from occupying the same team slot.
+The database prevents a player from owning the same species more than once.
+
+### `AppliedReward`
+
+Records each encounter whose reward has been applied. The encounter ID is the
+primary key, so retrying the same reward request is idempotent.
 
 ## API
 
@@ -185,42 +185,28 @@ Response shape:
 
 Missing, expired, malformed, or invalid JWTs return `401`.
 
-### Player team
+### Internal player collection
 
 ```http
-GET /team
-PUT /team
+GET /internal/players/{player_id}/monsters
 Authorization: Bearer <JWT>
 ```
 
-`GET /team` returns the authenticated player's selected team. `PUT /team`
-replaces it and requires exactly three distinct ownership IDs belonging to the
-authenticated player:
-
-```json
-{
-  "owned_monster_ids": [1, 2, 3]
-}
-```
-
-Invalid JSON, duplicate IDs, a number other than three, or monsters belonging
-to another player return `400`.
-
-### Internal team snapshot
+This endpoint is intended for trusted services and returns the player's
+collection:
 
 ```http
-GET /internal/players/{player_id}/team
 X-Internal-Secret: <shared-secret>
 ```
 
-This endpoint is intended for trusted services. It returns the selected team
-and the catalogue species IDs already owned by the player:
+This endpoint is intended for trusted services. It returns the player's
+collection:
 
 ```json
 {
   "player_id": "player_123",
-  "team": [],
-  "owned_species_ids": [1, 5, 9]
+  "count": 3,
+  "collection": []
 }
 ```
 
@@ -279,9 +265,9 @@ conflicts return `409`.
 
 The service supports two authentication mechanisms:
 
-1. **Player JWTs** use RS256 and are required for `/collection` and `/team`.
+1. **Player JWTs** use RS256 and are required for `/collection`.
 2. **Internal service secrets** use the `X-Internal-Secret` header and are
-   required for internal team and reward routes.
+   required for internal collection and reward routes.
 
 Supported environment variables:
 
@@ -349,7 +335,7 @@ pytest
 ```
 
 The test suite covers catalogue retrieval, image routes, JWT failures, lazy
-starter initialization, team validation, internal-secret protection, capture
+starter initialization, internal-secret protection, capture
 rewards, idempotency, and capped stat rewards.
 
 The `tests/bruno` collection provides additional request-level checks for the
@@ -361,4 +347,3 @@ catalogue, collection, and reward workflows.
 collection, and internal reward operations. It can be imported into Swagger
 UI, Postman, Bruno, or another OpenAPI-compatible tool for interactive
 testing.
-

@@ -202,9 +202,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /internal/players/{player_id}/team:
+  /internal/players/{player_id}/monsters:
     get:
-      summary: Returns the player's team and owned species IDs (C9)
+      summary: Returns the player's collection (C9)
       tags: [Internal]
       security:
         - InternalSecretAuth: []
@@ -216,7 +216,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Team snapshot and species already owned by the player
+          description: Player collection
         '403':
           description: Internal service authentication failed
 

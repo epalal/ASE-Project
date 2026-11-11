@@ -33,7 +33,7 @@ jobs:
         run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait
 
       - name: Run Component Tests with Bruno
-        run: bru run "monster_service/tests/bruno" --env local-component --insecure
+        run: bru run "monster_service/tests/bruno 1" --env local-component --insecure
 
       - name: Show logs if failure
         if: failure()

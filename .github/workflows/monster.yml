@@ -2,13 +2,11 @@ name: CI Monster Service
 
 on:
   push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
   component-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out the repository
@@ -22,11 +20,19 @@ jobs:
       - name: Install the Bruno CLI
         run: npm install -g @usebruno/cli@4.3.0
 
+      - name: Generate CI Secrets and Certificates
+        run: |
+          mkdir -p monster_service/certs
+          echo "postgres" > monster_service/certs/db_password.txt
+          echo "U3VwZXJTZWNyZXRGZXJuZXRLZXlGb3JDSVRlc3RzISE=" > monster_service/certs/data_key.txt
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout monster_service/certs/server.key -out monster_service/certs/server.pem -subj "/CN=localhost"
+          cp monster_service/certs/server.pem monster_service/certs/ca.pem
+
       - name: Start monster_service database and API
         run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait
 
       - name: Run Component Tests with Bruno
-        run: bru run "monster_service/tests/bruno 1" --env local-component
+        run: bru run "monster_service/tests/bruno" --env local-component --insecure
 
       - name: Show logs if failure
         if: failure()
@@ -34,4 +40,4 @@ jobs:
 
       - name: Stop stack
         if: always()
-        run: docker compose -f monster_service/docker-compose.yaml down
+        run: docker compose -f monster_service/docker-compose.yaml down -v

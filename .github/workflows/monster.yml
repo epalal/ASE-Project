@@ -33,8 +33,12 @@ jobs:
         run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait
 
       - name: Run Component Tests with Bruno
-        run: bru run "monster_service/tests/bruno" --env local-component --insecure
-
+        working-directory: monster_service/tests/bruno
+        run: |
+          if [ ! -f bruno.json ]; then
+            echo '{"version": "1", "name": "monster_service_tests", "type": "collection"}' > bruno.json
+          fi
+          bru run --env local-component --insecure
       - name: Show logs if failure
         if: failure()
         run: docker compose -f monster_service/docker-compose.yaml logs

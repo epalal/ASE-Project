@@ -8,27 +8,51 @@ services:
     volumes:
       - ./certs:/certs:ro
     environment:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@monster_db:5432/monster_db
-      INTERNAL_SERVICE_SECRET: test-internal-secret-key
-      JWT_PUBLIC_KEY: |
-        -----BEGIN PUBLIC KEY-----
-        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg+BRGw+Ra7kdDy5fJdDjXVFqnS+1NrdGvt99wNpCbe51aA6awV1gG4HV3/p1Fj29iKFWXORtqNLlcWNay1uGeCVd/9KlTdIBkYUGcE2e0F44Qnxcm3/X9eJ51iPAQ0xPad+SDxSlVPlfK1PDUkfFKCoqJN2gMBVsQXJGBILXvBytxv4jk9Klmu6a1TIRhEanDUez+SeOVvtn4k5fVAW/PuFzp+cUoncUf4gq9CjxxANgThDYQrSoBzAAbRCuvda6c52YNz1Qos3IdU6XlchbOedF8SMRAFWP1xpoZZTcmWcCKwWGZ9JSAak/G1PGDUXoAiv8aFom/yVdIOPWv0cgUwIDAQAB
-        -----END PUBLIC KEY-----
+      - DATABASE_URL=postgresql://monster_db:5432/monster_db
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-test-internal-secret-key}
+      - JWT_PUBLIC_KEY= |
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg+BRGw+Ra7kdDy5fJdDjXVFqnS+1NrdGvt99wNpCbe51aA6awV1gG4HV3/p1Fj29iKFWXORtqNLlcWNay1uGeCVd/9KlTdIBkYUGcE2e0F44Qnxcm3/X9eJ51iPAQ0xPad+SDxSlVPlfK1PDUkfFKCoqJN2gMBVsQXJGBILXvBytxv4jk9Klmu6a1TIRhEanDUez+SeOVvtn4k5fVAW/PuFzp+cUoncUf4gq9CjxxANgThDYQrSoBzAAbRCuvda6c52YNz1Qos3IdU6XlchbOedF8SMRAFWP1xpoZZTcmWcCKwWGZ9JSAak/G1PGDUXoAiv8aFom/yVdIOPWv0cgUwIDAQAB
+          -----END PUBLIC KEY-----
     depends_on:
       monster_db:
         condition: service_healthy
+    secrets:
+      - ca
+      - source: monster_cert
+        target: cert
+      - source: monster_key
+        target: key
+      - db_password
+      - data_key
 
   monster_db:
     image: postgres:15-alpine
     container_name: monster_db
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
       - POSTGRES_DB=monster_db
-    ports:
-      - "127.0.0.1:5432:5432"
+    secrets:
+      - db_password
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "127.0.0.1:5432:5432"
+
+secrets:
+  ca:
+    file: ./certs/ca.pem
+  monster_cert:
+    file: ./certs/server.pem
+  monster_key:
+    file: ./certs/server.key
+  db_password:
+    file: ./certs/db_password.txt
+  data_key:
+    file: ./certs/data_key.txt

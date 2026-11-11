@@ -1,0 +1,29 @@
+info:
+  name: Grant Reward 1e999
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{monsterUrl}}/internal/rewards"
+  headers:
+    - name: Content_Type
+      value: application/json
+    - name: X-Internal-Secret
+      value: "{{internalSecret}}"
+  body:
+    type: text
+    data: |-
+      {
+        "player_id": "player_01",
+        "captured_species_id": 1e999,
+        "encounter_id": "enc_001"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

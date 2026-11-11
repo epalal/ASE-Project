@@ -1,7 +1,7 @@
 name: local-component
 variables:
   - name: monsterUrl
-    value: http://localhost:5002
+    value: https://localhost:5002
   - name: internalSecret
     value: test-internal-secret-key
   - name: testToken

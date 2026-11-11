@@ -21,4 +21,4 @@ USER appuser
 
 EXPOSE 5002
 
-CMD ["gunicorn", "-b", "0.0.0.0:5002", "app:create_app()"]
+CMD ["flask", "--app", "app", "run", "--host=0.0.0.0", "--port=5002", "--cert=/run/secrets/cert", "--key=/run/secrets/key"]

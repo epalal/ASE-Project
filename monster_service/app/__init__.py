@@ -3,9 +3,18 @@ from flask import Flask, send_from_directory, jsonify
 from .models import db
 from .routes.monsters import monsters_bp
 
+def read_secret(secret_name, default=None):
+    """Reads a secret from the Docker secrets directory. If the secret is not found, returns the default value."""
+    try:
+        with open(f"/run/secrets/{secret_name}", "r") as f:
+            return f.read().strip()
+    except IOError:
+        return default
+    
 def create_app(test_config=None):
     app = Flask(__name__)
-    db_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@monster_db:5432/monster_db")
+    db_password = read_secret("db_password", "postgres")
+    db_url = f"postgresql://postgres:{db_password}@monster_db:5432/monster_db"
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=db_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False

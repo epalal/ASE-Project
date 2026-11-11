@@ -12,13 +12,13 @@ services:
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-test-internal-secret-key}
       JWT_PUBLIC_KEY: |
         -----BEGIN PUBLIC KEY-----
-        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg+BRGw+Ra7kdDy5fJdDj
-        XVFqnS+1NrdGvt99wNpCbe51aA6awV1gG4HV3/p1Fj29iKFWXORtqNLlcWNay1uG
-        eCVd/9KlTdIBkYUGcE2e0F44Qnxcm3/X9eJ51iPAQ0xPad+SDxSlVPlfK1PDUkfF
-        KCoqJN2gMBVsQXJGBILXvBytxv4jk9Klmu6a1TIRhEanDUez+SeOVvtn4k5fVAW/
-        PuFzp+cUoncUf4gq9CjxxANgThDYQrSoBzAAbRCuvda6c52YNz1Qos3IdU6Xlchb
-        OedF8SMRAFWP1xpoZZTcmWcCKwWGZ9JSAak/G1PGDUXoAiv8aFom/yVdIOPWv0cg
-        UwIDAQAB
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7WP5uNd8DYvSrdDypUYy
+        0Gp3L1LrjXE5r8JMo6shIo/oklWgepVRJKFpOEIMrwj7LLM+Xonjmw0rxH4afVU9
+        am9RQpWg59XksKaITOdld+zc67kMkov7Tx6z3yvImrWekML29BHrgpbQvi2pMRWU
+        OJIrSRHQTTXiwNDXNxYBZk/phggpRsMFxxUBXEcCp9Id4Cx/0ADeIvCtCL/CyeVV
+        CAvc/Rdc4DEk2swJ8s+T35IsMbQ40VM59mQSyByCulTxVNXHgUgKxRtqbZVdGKPr
+        +15wyjuzBb3WClBZXJoseQIQFcNtbTotu8Cj7bSXblov4Y1jSIVZfVKNpTTTIhQu
+        awIDAQAB
         -----END PUBLIC KEY-----
     depends_on:
       monster_db:
@@ -48,8 +48,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    ports:
-      - "127.0.0.1:5432:5432"
 
 secrets:
   ca:

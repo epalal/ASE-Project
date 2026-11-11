@@ -27,6 +27,7 @@ jobs:
           echo "U3VwZXJTZWNyZXRGZXJuZXRLZXlGb3JDSVRlc3RzISE=" > monster_service/certs/data_key.txt
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout monster_service/certs/server.key -out monster_service/certs/server.pem -subj "/CN=localhost"
           cp monster_service/certs/server.pem monster_service/certs/ca.pem
+          chmod a+r monster_service/certs/*
 
       - name: Start monster_service database and API
         run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait

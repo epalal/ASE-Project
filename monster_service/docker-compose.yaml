@@ -8,12 +8,18 @@ services:
     volumes:
       - ./certs:/certs:ro
     environment:
-      - DATABASE_URL=postgresql://monster_db:5432/monster_db
-      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-test-internal-secret-key}
-      - JWT_PUBLIC_KEY= |
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg+BRGw+Ra7kdDy5fJdDjXVFqnS+1NrdGvt99wNpCbe51aA6awV1gG4HV3/p1Fj29iKFWXORtqNLlcWNay1uGeCVd/9KlTdIBkYUGcE2e0F44Qnxcm3/X9eJ51iPAQ0xPad+SDxSlVPlfK1PDUkfFKCoqJN2gMBVsQXJGBILXvBytxv4jk9Klmu6a1TIRhEanDUez+SeOVvtn4k5fVAW/PuFzp+cUoncUf4gq9CjxxANgThDYQrSoBzAAbRCuvda6c52YNz1Qos3IdU6XlchbOedF8SMRAFWP1xpoZZTcmWcCKwWGZ9JSAak/G1PGDUXoAiv8aFom/yVdIOPWv0cgUwIDAQAB
-          -----END PUBLIC KEY-----
+      DATABASE_URL: postgresql://monster_db:5432/monster_db
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-test-internal-secret-key}
+      JWT_PUBLIC_KEY: |
+        -----BEGIN PUBLIC KEY-----
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg+BRGw+Ra7kdDy5fJdDj
+        XVFqnS+1NrdGvt99wNpCbe51aA6awV1gG4HV3/p1Fj29iKFWXORtqNLlcWNay1uG
+        eCVd/9KlTdIBkYUGcE2e0F44Qnxcm3/X9eJ51iPAQ0xPad+SDxSlVPlfK1PDUkfF
+        KCoqJN2gMBVsQXJGBILXvBytxv4jk9Klmu6a1TIRhEanDUez+SeOVvtn4k5fVAW/
+        PuFzp+cUoncUf4gq9CjxxANgThDYQrSoBzAAbRCuvda6c52YNz1Qos3IdU6Xlchb
+        OedF8SMRAFWP1xpoZZTcmWcCKwWGZ9JSAak/G1PGDUXoAiv8aFom/yVdIOPWv0cg
+        UwIDAQAB
+        -----END PUBLIC KEY-----
     depends_on:
       monster_db:
         condition: service_healthy

@@ -13,7 +13,6 @@ class User(Base):
     username = Column(String, nullable=False, unique=True)
     password_hashed = Column(String, nullable=False)
     created_at = Column(DateTime, default=time.time())
-    token = Column(String, unique=True)
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///player_db.sqlite3")
 engine = create_engine(DATABASE_URL, echo=True)

@@ -106,8 +106,6 @@ def login():
             algorithm="RS256"
         )
 
-        
-
         session.close()
         return jsonify(message="Successful login", username=username, id=user.id, token=token), 200
 

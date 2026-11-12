@@ -8,6 +8,7 @@ of running them.
 |---|---|---|
 | `encounter` | The Encounter Service's answers: team, challenges, encounters, every error | `encounter-component` |
 | `encounter-stub` | What the Encounter Service asks the Monster Service, and what happens when it fails or refuses | `encounter-component` (component tests only) |
+| `encounter-security` | Hostile input (Lab 8): a body over 10 KB, control characters, `NaN`, huge numbers, text that is not JSON. Each one must be refused | `encounter-component` |
 
 Each folder starts by getting login tokens from the Player Service stub, so a folder
 can run on its own and nothing secret is stored here.
@@ -26,7 +27,7 @@ CA Certificate" and choose `tests/bruno/ca.pem`. The file is not committed, and 
 new one is made after every `down -v`, so copy it again then.
 
 Then open this folder as a collection, choose the environment `encounter-component`
-and run the folders `encounter` and `encounter-stub` with the Runner.
+and run the folders `encounter`, `encounter-stub` and `encounter-security` with the Runner.
 
 ```
 docker compose -f compose.encounter.yaml down -v       # stop; -v also deletes the data and certificates
@@ -38,14 +39,14 @@ With Node installed (`npm install -g @usebruno/cli@4.3.0`):
 
 ```
 cd tests/bruno
-bru run encounter encounter-stub --env encounter-component --cacert ca.pem
+bru run encounter encounter-stub encounter-security --env encounter-component --cacert ca.pem
 ```
 
 Without Node, the same run in a container on the stack's network:
 
 ```
 docker run --rm --network encounter-component_default -v "$PWD/tests/bruno:/bruno" -w /bruno \
-  node:22-alpine npx -y @usebruno/cli@4.3.0 run encounter encounter-stub --env encounter-component \
+  node:22-alpine npx -y @usebruno/cli@4.3.0 run encounter encounter-stub encounter-security --env encounter-component \
   --env-var encounterUrl=https://encounter-service:5003 \
   --env-var monsterStubUrl=https://monster-service:5002 \
   --env-var playerStubUrl=https://player-service:5001 --cacert ca.pem

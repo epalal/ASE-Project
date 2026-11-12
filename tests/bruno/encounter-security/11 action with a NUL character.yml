@@ -1,0 +1,30 @@
+info:
+  name: action with a NUL character
+  type: http
+  seq: 11
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters/{{encounterId}}/action"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: text
+    data: |-
+      {"action": "attack\u0000"}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+    - expression: res.body.error
+      operator: eq
+      value: "invalid_input"
+
+settings:
+  encodeUrl: true

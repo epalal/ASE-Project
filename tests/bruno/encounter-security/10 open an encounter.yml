@@ -1,0 +1,28 @@
+info:
+  name: open an encounter
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  body:
+    type: json
+    data: |-
+      {"challenge_id": 12}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("encounterId", res.body.id);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "201"
+
+settings:
+  encodeUrl: true

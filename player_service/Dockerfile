@@ -12,4 +12,4 @@ COPY . .
 
 EXPOSE 5001
 
-CMD ["flask", "--app", "app", "run", "--host=0.0.0.0", "--port=5001"]
+CMD ["flask", "--app", "app", "run", "--host=0.0.0.0", "--port=5001", "--cert=/certs/server.pem", "--key=/certs/server.key"]

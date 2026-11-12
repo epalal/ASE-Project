@@ -36,7 +36,7 @@ if os.path.exists(SESSION_FILE):
         with open(SESSION_FILE, 'r', encoding='utf-8') as f:
             session_tokens = json.load(f)
     except json.JSONDecodeError:
-        app.logger.error("[auth_service] Error while reading file session_tokens.json")
+        app.logger.error("[player_service] Error while reading file session_tokens.json")
         session_tokens = {}
 else:
     session_tokens = {}
@@ -122,6 +122,10 @@ def login():
             PRIVATE_KEY,
             algorithm="RS256"
         )
+
+        user.token = token
+        session.add(user)
+        session.commit()
 
         session.close()
         return jsonify(message="Successful login", username=username, id=user.id, token=token), 200

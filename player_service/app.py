@@ -13,11 +13,6 @@ from bcrypt import hashpw, gensalt, checkpw
 
 app = Flask(__name__)
 
-BASE_DIR = "/project"
-DATA_DIR = "/data"
-DATA_FILE = os.path.join(DATA_DIR, "users_data.json")
-SESSION_FILE = os.path.join(DATA_DIR, "session_tokens.json")
-
 PRIVATE_KEY_PATH = "/certs/jwt_private.pem"
 PUBLIC_KEY_PATH = "/certs/jwt_public.pem"
 
@@ -28,18 +23,6 @@ with open(PUBLIC_KEY_PATH, 'r') as f:
     PUBLIC_KEY = f.read()
 
 db_lock = threading.Lock()
-
-session_tokens = {}
-
-if os.path.exists(SESSION_FILE):
-    try:
-        with open(SESSION_FILE, 'r', encoding='utf-8') as f:
-            session_tokens = json.load(f)
-    except json.JSONDecodeError:
-        app.logger.error("[player_service] Error while reading file session_tokens.json")
-        session_tokens = {}
-else:
-    session_tokens = {}
 
 def error(code, message, status=400):
     return jsonify(error=code, message=message), status
@@ -123,9 +106,7 @@ def login():
             algorithm="RS256"
         )
 
-        user.token = token
-        session.add(user)
-        session.commit()
+        
 
         session.close()
         return jsonify(message="Successful login", username=username, id=user.id, token=token), 200
@@ -143,6 +124,4 @@ def health():
     return jsonify(status="healthy"), 200
 
 if __name__ == '__main__':
-    os.makedirs(DATA_DIR, exist_ok=True)
-    Base.metadata.create_all(engine)
     app.run(host='0.0.0.0', port=5001, ssl_context=("/certs/server.pem", "/certs/server.key"))

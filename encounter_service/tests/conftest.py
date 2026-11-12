@@ -3,6 +3,7 @@ import threading
 
 import jwt
 import pytest
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from werkzeug.serving import make_server
@@ -268,6 +269,7 @@ def app(player_service_keys, monster_service, dice, database_uri):
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": database_uri,
             "JWT_PUBLIC_KEY": public_pem,
+            "DATA_KEY": Fernet.generate_key(),
         },
         monster_client=monster_service,
         draw=dice.roll,

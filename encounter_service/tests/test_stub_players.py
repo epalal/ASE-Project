@@ -5,6 +5,7 @@ choose it. Instead the Monster stub gives some players monsters so strong that
 their attack wins even with the highest possible roll."""
 
 import pytest
+from cryptography.fernet import Fernet
 
 from app import create_app
 from app.http_monster_client import HttpMonsterClient
@@ -19,7 +20,12 @@ CINDRAKE = 11  # the strongest wild monster
 def client_with_stub(stub_url, player_service_keys):
     _, public_pem = player_service_keys
     app = create_app(
-        {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite://", "JWT_PUBLIC_KEY": public_pem},
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "JWT_PUBLIC_KEY": public_pem,
+            "DATA_KEY": Fernet.generate_key(),
+        },
         monster_client=HttpMonsterClient(stub_url, STUB_SECRET),
         draw=lambda: HIGHEST_ROLL,
     )

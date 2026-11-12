@@ -185,8 +185,8 @@ The team lives here because it only exists to prepare encounters (US-14: "so tha
 | `challenge_id` | references `challenge` | Which challenge |
 | `status` | `open` or `closed` | An open encounter is waiting for the player's action |
 | | unique (`player_id`) where `status` is `open` | The database allows only one open encounter per player |
-| `team_snapshot` | JSON, not null | The three monsters with their stats when the encounter opened; history stays correct after rewards change the stats |
-| `wild_snapshot` | JSON, not null | The wild monster's stats used in the encounter |
+| `team_snapshot` | JSON, encrypted, not null | The three monsters with their stats when the encounter opened; history stays correct after rewards change the stats |
+| `wild_snapshot` | JSON, encrypted, not null | The wild monster's stats used in the encounter |
 | `team_power`, `challenge_power`, `p_win` | not null | The full calculation, so any result can be checked; also feeds the result and history pages (US-20, US-24) |
 | `p_capture` | nullable | Empty when the player already owns the wild monster, because capture is not offered |
 | `action` | `attack`, `capture` or `escape`; empty while open | What the player chose (US-21, US-22) |
@@ -194,6 +194,8 @@ The team lives here because it only exists to prepare encounters (US-14: "so tha
 | `result` | `win`, `loss`, `captured`, `failed` or `escaped`; empty while open | |
 | `reward_status` | `none`, `pending`, `applied` or `failed` | `pending`: not delivered yet, sent again before the player's next encounter. `failed`: the Monster Service refused it |
 | `created_at`, `closed_at` | timestamp | |
+
+The two snapshots are encrypted at rest (Lab 8). The Encounter Service encrypts them with Fernet before saving and decrypts them when reading, so the API answers are unchanged. A copy of the database files or of a backup shows only Fernet tokens. tls-init makes the key once and stores it in `encounter-service/data.key`, in the volume that only the Encounter Service mounts. encounter-db never sees the key, and it is never in git. The other columns stay readable because the database works with them: it searches by `player_id`, sorts by `created_at`, allows one open encounter per player, and checks the allowed values of `action`, `result` and `reward_status`. Fernet gives a different token each time, so the database could not compare encrypted values. Without the key the snapshots cannot be read, so tls-init never replaces an existing key; `docker compose down -v` deletes the key and the data together.
 
 ### Rules for all databases
 
@@ -285,3 +287,4 @@ Allowing one open encounter per player needs no timers or cleanup jobs. Because 
 | A separate "progress" table (level, experience) | Not used; progress is the collection, the monsters' stats and the encounter history |
 | Gateway owner | Elisa |
 | Team (table, `GET /team`, `PUT /team`) | Encounter Service, built by Hatem; moved from the Monster Service on Elena's suggestion |
+| Data at rest in encounter-db | The team and wild snapshots are encrypted with Fernet in the Encounter Service; the key comes from tls-init, apart from the data (Lab 8) |

@@ -2,6 +2,7 @@
 (set by Docker Compose), and a missing setting stops the start with a clear message."""
 
 import pytest
+from cryptography.fernet import Fernet
 
 from app import StartupError, create_app
 from conftest import STUB_SECRET
@@ -15,6 +16,7 @@ ALL_SETTINGS = [
     "MONSTER_SERVICE_URL",
     "INTERNAL_SERVICE_SECRET",
     "CA_CERT_PATH",
+    "DATA_KEY_PATH",
 ]
 
 
@@ -28,7 +30,13 @@ def test_the_service_refuses_to_start_without_its_settings(empty_environment):
     with pytest.raises(StartupError) as refused:
         create_app()
 
-    for missing in ["DATABASE_URL", "JWT_PUBLIC_KEY", "MONSTER_SERVICE_URL", "INTERNAL_SERVICE_SECRET"]:
+    for missing in [
+        "DATABASE_URL",
+        "JWT_PUBLIC_KEY",
+        "MONSTER_SERVICE_URL",
+        "INTERNAL_SERVICE_SECRET",
+        "DATA_KEY_PATH",  # Lab 8: the key that encrypts the stored encounters
+    ]:
         assert missing in str(refused.value)
 
 
@@ -38,8 +46,11 @@ def test_with_its_settings_it_talks_to_the_monster_service_over_http(
     _, public_pem = player_service_keys
     key_file = tmp_path / "jwt_public.pem"
     key_file.write_text(public_pem)
+    data_key_file = tmp_path / "data.key"
+    data_key_file.write_bytes(Fernet.generate_key() + b"\n")  # a file made by a tool ends with a newline
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'encounter.db'}")
     monkeypatch.setenv("JWT_PUBLIC_KEY_PATH", str(key_file))
+    monkeypatch.setenv("DATA_KEY_PATH", str(data_key_file))
     monkeypatch.setenv("MONSTER_SERVICE_URL", stub_url)
     monkeypatch.setenv("INTERNAL_SERVICE_SECRET", STUB_SECRET)
     client = create_app().test_client()

@@ -43,6 +43,9 @@ services:
       MONSTER_SERVICE_URL: https://monster-service:5002
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it in .env}
       CA_CERT_PATH: /certs/ca.pem
+      # Lab 8: the key that encrypts the stored encounters. tls-init makes it once,
+      # in this service's own volume, which encounter-db never mounts.
+      DATA_KEY_PATH: /certs/data.key
     volumes:
       - encounter-service-certs:/certs:ro
     depends_on:

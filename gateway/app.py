@@ -6,7 +6,12 @@ app = Flask(__name__)
 
 AUTH_URL = os.environ.get("AUTH_URL", "http://auth:5001").rstrip("/")
 GAME_URL = os.environ.get("GAME_URL", "http://game:5002").rstrip("/")
+MONSTER_URL = os.environ.get("MONSTER_URL", "https://monster:5002").rstrip("/")
+
 REQUEST_TIMEOUT = 3
+MONSTER_CA_BUNDLE = os.environ.get("MONSTER_CA_BUNDLE")
+
+MONSTER_TLS_VERIFY = MONSTER_CA_BUNDLE if MONSTER_CA_BUNDLE else False
 
 def error(code, message, status=400):
     return jsonify(error=code, message=message), status
@@ -36,6 +41,8 @@ def downstream_failure(response):
         return error("upstream_error", "An internal service request failed", 502)
 
 def forward(method, url, **kwargs):
+    if url.startswith("https://") and "verify" not in kwargs:
+        kwargs["verify"] = MONSTER_TLS_VERIFY
     try:
         res = requests.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
         if res.status_code >= 400:
@@ -135,6 +142,47 @@ def proxy_add_character():
     if failure is not None:
         return failure
     return jsonify(data), 200
+
+@app.get("/monsters")
+def proxy_get_monsters():
+    data, failure = forward("GET", f"{MONSTER_URL}/monsters")
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+@app.get("/collection")
+def proxy_get_collection():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return error("unauthorized", "Missing Authorization header", 401)
+
+    data, failure = forward(
+        "GET",
+        f"{MONSTER_URL}/collection",
+        headers={"Authorization": auth_header}
+    )
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+@app.get("/assets/monsters/<path:filename>")
+def proxy_monster_assets(filename):
+    try:
+        res = requests.get(
+            f"{MONSTER_URL}/assets/monsters/{filename}",
+            timeout=REQUEST_TIMEOUT,
+            verify=MONSTER_TLS_VERIFY
+        )
+        if res.status_code >= 400:
+            return downstream_failure(res)
+        return res.content, res.status_code, {
+            "Content-Type": res.headers.get("Content-Type", "application/octet-stream")
+        }
+    except requests.Timeout:
+        return error("upstream_timeout", "An internal service did not respond in time", 504)
+    except requests.RequestException:
+        app.logger.exception("Cannot contact %s for asset %s", MONSTER_URL, filename)
+        return error("upstream_error", "An internal service request failed", 502)
 
 @app.route('/', methods=['GET'])
 def home():

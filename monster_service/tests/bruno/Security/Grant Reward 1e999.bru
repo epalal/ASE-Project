@@ -1,0 +1,28 @@
+meta {
+  name: Grant Reward 1e999
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{monsterUrl}}/internal/rewards
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Internal-Secret: {{internalSecret}}
+}
+
+body:text {
+  {
+    "player_id": "player_01",
+    "captured_species_id": 1e999,
+    "encounter_id": "enc_001"
+  }
+}
+
+assert {
+  res.status: eq 400
+}

@@ -14,15 +14,19 @@ headers {
   X-Internal-Secret: {{internalSecret}}
 }
 
+script:pre-request {
+  bru.setVar("dynamicEncounterId", "enc_" + Date.now());
+}
+
 body:json {
   {
     "player_id": "test_player_01",
-    "monster_id": 11,
-    "encounter_id": "enc_999"
+    "captured_species_id": 11,
+    "encounter_id": "{{dynamicEncounterId}}"
   }
 }
 
 assert {
-  res.status: in [200, 201]
+  res.status: eq 201
   res.body.reward.monster.id: eq 11
 }

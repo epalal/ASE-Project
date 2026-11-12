@@ -46,3 +46,39 @@ jobs:
       - name: Stop stack
         if: always()
         run: docker compose -f monster_service/docker-compose.yaml down -v
+  
+  security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install security tools
+        run: pip install bandit pip-audit
+      - name: Run Bandit (Static Code Analysis)
+        run: bandit -r monster_service/app -x ./monster_service/tests --severity-level medium
+      - name: Run pip-audit (Dependency Audit)
+        run: pip-audit -r monster_service/requirements.txt
+
+  images:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t monster-service:ci ./monster_service
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'monster-service:ci'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+      - name: Scan Dockerfile & Secrets with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'config'
+          scan-ref: './monster_service'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'

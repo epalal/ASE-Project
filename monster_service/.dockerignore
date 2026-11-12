@@ -16,3 +16,4 @@ htmlcov/
 .gitignore
 tests/
 README.md
+certs/

@@ -13,11 +13,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create a non-root user to run the application and generate a self-signed certificate for HTTPS.
-RUN useradd -m -r appuser && \
+RUN sed -i '1s/^\xef\xbb\xbf//;s/\r$//' /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh && \
+    useradd -m -r appuser && \
     chown -R appuser:appuser /app
-
+    
 USER appuser
 
 EXPOSE 5002
 
-CMD ["flask", "--app", "app", "run", "--host=0.0.0.0", "--port=5002", "--cert=/run/secrets/cert", "--key=/run/secrets/key"]
+ENTRYPOINT ["sh", "/app/entrypoint.sh"]

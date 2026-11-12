@@ -7,10 +7,13 @@ services:
     environment:
       AUTH_URL: http://auth:5001
       GAME_URL: http://game:5002
+      MONSTER_URL: https://monster:5002
     depends_on:
       auth:
         condition: service_healthy
       game:
+        condition: service_healthy
+      monster:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5005/health', timeout=2)"]
@@ -59,7 +62,7 @@ services:
     expose:
       - "5002"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5002/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; ctx = ssl._create_unverified_context(); urllib.request.urlopen('https://localhost:5002/health', context=ctx, timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10

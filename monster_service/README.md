@@ -6,7 +6,7 @@ creates and stores each player's collection, serves monster artwork, and
 receives rewards from the Encounter Service.
 
 The service exposes a JSON HTTP API and persists its data with SQLAlchemy. In a
-containerized deployment it runs behind Gunicorn on port `5002` and connects to
+containerized deployment it listens on port `5002` over HTTPS and connects to
 PostgreSQL.
 
 ## Responsibilities
@@ -44,7 +44,7 @@ monster_service/
 ├── tests/
 │   ├── test_monsters.py         # Flask integration tests
 │   └── bruno/                   # Bruno API request collection
-├── compose.monster.yaml         # Docker Compose definition
+├── docker-compose.yaml          # Docker Compose definition
 ├── Dockerfile                   # Production container image
 ├── openapi.yaml                 # OpenAPI 3.0 API description
 └── requirements.txt             # Python dependencies
@@ -56,7 +56,8 @@ The application is created through the `create_app()` factory in
 `app/__init__.py`. Startup performs the following operations:
 
 1. Creates a Flask application.
-2. Reads the database URL from `DATABASE_URL`.
+2. Builds the PostgreSQL connection using the `monster_db` host and the
+   `db_password` Docker secret (or the default local password).
 3. Initializes Flask-SQLAlchemy.
 4. Registers the monster blueprint.
 5. Creates database tables if they do not already exist.
@@ -273,7 +274,7 @@ Supported environment variables:
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | SQLAlchemy database connection string |
+| `DATABASE_URL` | Reserved for future configuration; currently ignored by the application |
 | `JWT_PUBLIC_KEY` | PEM-encoded RSA public key; escaped `\n` sequences are expanded |
 | `JWT_PUBLIC_KEY_PATH` | File containing the public key; default `/certs/jwt_public.pem` |
 | `INTERNAL_SERVICE_SECRET` | Shared secret for internal endpoints |
@@ -286,7 +287,7 @@ manager rather than committing them to source control.
 From this directory:
 
 ```bash
-docker compose -f compose.monster.yaml up --build
+docker compose -f docker-compose.yaml up --build
 ```
 
 The Compose file starts:
@@ -294,9 +295,52 @@ The Compose file starts:
 - `monster_service`, exposed on `127.0.0.1:5002`;
 - `monster_db`, a PostgreSQL 15 instance on `127.0.0.1:5432`.
 
-The container listens on port `5002` with Gunicorn and generates a
-self-signed HTTPS certificate during image creation. The Compose configuration
-uses the service name `monster_db` to connect to PostgreSQL.
+The container listens on port `5002` with Flask's HTTPS development server. The
+certificate and key are mounted as Docker secrets; the image does not generate
+them automatically. The Compose configuration uses the service name
+`monster_db` to connect to PostgreSQL.
+
+The Compose file expects these files to exist before startup:
+
+```text
+certs/ca.pem
+certs/server.pem
+certs/server.key
+certs/db_password.txt
+certs/data_key.txt
+```
+
+The database password is read from `certs/db_password.txt`. `DATABASE_URL` is
+currently not used by the application, so changing that variable alone does
+not change the database connection.
+
+To check the service after startup:
+
+```bash
+curl -k https://localhost:5002/health
+curl -k https://localhost:5002/monsters
+```
+
+The `-k` option is needed for the repository's self-signed certificate. A
+browser or frontend must either trust the configured CA certificate or use the
+gateway that terminates/proxies HTTPS.
+
+The public catalogue and image routes do not require a token. The collection
+route requires a JWT issued by the Player/Auth Service, while the
+`/internal/*` routes are for service-to-service calls only and require
+`X-Internal-Secret`. The frontend should not call the internal routes or send
+the internal secret.
+
+To build and run only this service, use the Compose file from this directory:
+
+```bash
+docker compose -f docker-compose.yaml up --build
+```
+
+Running only `docker build` followed by `docker run` is not sufficient unless
+the PostgreSQL database, HTTPS certificate/key, JWT public key, and internal
+secret are provided separately. The recommended standalone setup is therefore
+the provided Compose file.
 
 ## Running locally
 
@@ -312,17 +356,27 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Set `DATABASE_URL`, `JWT_PUBLIC_KEY` (or `JWT_PUBLIC_KEY_PATH`), and
-`INTERNAL_SERVICE_SECRET`, then start Flask through the application factory:
+Set `JWT_PUBLIC_KEY` (or `JWT_PUBLIC_KEY_PATH`) and
+`INTERNAL_SERVICE_SECRET`. For a local PostgreSQL instance, the current
+application expects a database reachable as `monster_db`; the Docker Compose
+configuration supplies this hostname automatically. Then start Flask through
+the application factory:
 
 ```bash
 flask --app "app:create_app()" run --port 5002
 ```
 
-For a production-style local process:
+For a local process using HTTP:
 
 ```bash
-gunicorn --bind 0.0.0.0:5002 "app:create_app()"
+flask --app "app:create_app()" run --host 0.0.0.0 --port 5002
+```
+
+For HTTPS outside Docker, provide the certificate and key explicitly:
+
+```bash
+flask --app "app:create_app()" run --host 0.0.0.0 --port 5002 \
+  --cert path/to/server.pem --key path/to/server.key
 ```
 
 ## Testing

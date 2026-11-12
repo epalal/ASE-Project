@@ -105,7 +105,7 @@ paths:
                 monster_ids: ['101', '105', '109']
         '400':
           description: |-
-            - `invalid_input`: the body is not `{"monster_ids": [...]}` with each ID as text
+            - `invalid_input`: the body is not `{"monster_ids": [...]}` with each ID as printable text (no control characters)
             - `team_size`: not exactly three monsters
             - `duplicate_monster`: the same monster in two slots
             - `not_owned`: a monster the player does not own
@@ -122,6 +122,8 @@ paths:
                 message: A team can only use monsters you own.
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '409':
           $ref: '#/components/responses/Conflict'
         '502':
@@ -260,6 +262,8 @@ paths:
                         const: invalid_input
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '404':
           description: '`challenge_not_found`: there is no challenge with this ID'
           content:
@@ -403,6 +407,8 @@ paths:
                         const: invalid_input
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '404':
           description: |-
             `encounter_not_found`: the player has no encounter with this ID. An
@@ -444,6 +450,16 @@ components:
         `aud` = monster-tamers and `iss` = player-service.
 
   responses:
+    TooLarge:
+      description: '`request_entity_too_large`: the body is bigger than 10 KB; it is refused before it is read'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - properties:
+                  error:
+                    const: request_entity_too_large
     Unauthorized:
       description: '`unauthorized`: no token, or a token that is forged, expired, for another audience or issuer, or missing a claim'
       content:
@@ -504,7 +520,7 @@ components:
       type: string
       minLength: 1
       maxLength: 64
-      description: The ID of one monster the player owns, as the Monster Service's collection gives it, written as text
+      description: The ID of one monster the player owns, as the Monster Service's collection gives it, written as printable text
       examples: ['101']
 
     Team:

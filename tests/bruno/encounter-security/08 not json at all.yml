@@ -1,0 +1,30 @@
+info:
+  name: not json at all
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{encounterUrl}}/encounters"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: text
+    data: |-
+      not json at all
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+    - expression: res.body.error
+      operator: eq
+      value: "invalid_input"
+
+settings:
+  encodeUrl: true

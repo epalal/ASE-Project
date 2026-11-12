@@ -2,7 +2,8 @@
 # A failing test turns the run red. To add a service, add its name to the matrix:
 #   unit:       a folder with requirements-dev.txt and its pytest tests
 #   component:  compose.<name>.yaml, a compose service <name>-service, and the Bruno
-#               folders <name> and <name>-stub with the environment <name>-component
+#               folders <name>, <name>-stub and <name>-security (hostile input, Lab 8)
+#               with the environment <name>-component
 name: CI
 
 on:
@@ -75,7 +76,7 @@ jobs:
 
       - name: Component tests
         working-directory: tests/bruno
-        run: bru run ${{ matrix.service }} ${{ matrix.service }}-stub --env ${{ matrix.service }}-component --cacert ca.pem
+        run: bru run ${{ matrix.service }} ${{ matrix.service }}-stub ${{ matrix.service }}-security --env ${{ matrix.service }}-component --cacert ca.pem
 
       - name: Show the logs
         if: failure()

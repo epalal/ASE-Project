@@ -42,14 +42,23 @@ def _settings_from_environment():
     return settings
 
 
+MAX_BODY_BYTES = 10_000
+
+
 def create_app(test_config=None, monster_client=None, draw=None):
     """Without `test_config`, the settings come from the environment.
 
     `draw` returns a random number in [0, 1). Production uses the operating
     system's secure generator, so nobody can predict a roll; tests pass a fixed die."""
     app = Flask(__name__)
-    # Design rule 6: tokens are issued by the Player Service for this game.
-    app.config.from_mapping(JWT_ISSUER="player-service", JWT_AUDIENCE="monster-tamers")
+    app.config.from_mapping(
+        # Design rule 6: tokens are issued by the Player Service for this game.
+        JWT_ISSUER="player-service",
+        JWT_AUDIENCE="monster-tamers",
+        # Lab 8: our biggest request is a few hundred bytes, so a bigger body is
+        # refused with 413 before it is read.
+        MAX_CONTENT_LENGTH=MAX_BODY_BYTES,
+    )
     app.config.update(_settings_from_environment() if test_config is None else test_config)
 
     if monster_client is None:  # production: the real Monster Service over HTTPS

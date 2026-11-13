@@ -3,3 +3,4 @@ include:
   - gateway/compose.yaml
   - player_service/compose.yaml
   - encounter_service/compose.yaml
+  - frontend_service/compose.yaml

@@ -1,0 +1,23 @@
+services:  
+  player-service:
+    build: ./player_service
+    container_name: player-service
+    environment:
+      DATABASE_URL: sqlite:////data/player_db.sqlite3
+    volumes:
+      - player-service-certs:/certs:ro
+      - player-db-data:/data
+    group_add:
+      - "10000"
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  player-db-data:

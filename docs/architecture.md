@@ -91,13 +91,21 @@ With a shared secret, any compromised service could forge a token for any player
 
 ### 7. Every connection is encrypted and nothing else is exposed
 
-The frontend talks to the gateway over HTTPS, and so does the gateway to each service, with self-signed certificates. Services connect to their databases over TLS. No database port is published, and containers run as a non-root user. Passwords and keys come from environment variables or Docker secrets and are never committed; the repository keeps only a `.env.example`.
+The frontend talks to the gateway over HTTPS, and so does the gateway to each service. The certificates come from our own development certificate authority. At every `docker compose up`, the one-shot container tls-init creates whatever is missing: the authority, a certificate and key for each service and database, and the login-token key pair. Anything that already exists is kept. Each service mounts only its own folder and trusts only our authority, so a server with any other certificate is refused. Services connect to their databases over TLS. No database port is published, and containers run as a non-root user. Passwords come from a `.env` file that is never committed; the repository keeps only a `.env.example`.
 
-All of these are explicit requirements in §6. Encrypting traffic inside Docker limits what an attacker learns after taking over one container, and a non-root container has a much harder time attacking the host.
+All of these are explicit requirements in §6. Encrypting traffic inside Docker limits what an attacker learns after taking over one container, and a non-root container has a much harder time attacking the host. With one authority, each service trusts a single certificate file instead of a copy of every other service's certificate.
 
 ### 8. The gateway is a Flask application
 
 The gateway follows the pattern from Labs 5 and 6: a Flask app that forwards requests and returns 502 or 504 when a service fails or times out. Issue #11 said Nginx and slide 9 showed the Nginx logo. The gateway on `main` is already a Flask app, so only the slide changes, and the diagram above replaces it.
+
+### 9. Every input is checked, and the pipeline looks for known weaknesses
+
+Each service accepts only what it expects, refuses the rest with 400 and does not try to clean it. A body over 10 KB gets 413, numbers must be whole numbers in range (`NaN`, `1e999` and `1.5` are refused), and IDs must be short printable text. The Encounter Service does this today, and its Bruno folder `encounter-security` sends hostile requests that must be refused.
+
+On every push, CI checks each service folder listed in `ci.yml`: Bandit on the code, pip-audit on every `requirements*.txt`, and trivy on the image and its Dockerfile. A trivy secret scan also covers the whole repository. The run turns red on a medium or high Bandit finding, a library with a known vulnerability, a critical or high image vulnerability that already has a fix, or a committed secret. The Dockerfiles install the operating system's security fixes when the image is built.
+
+Lab 8 asks for input validation in every service, and Lab 9 asks the pipeline to catch vulnerable code, libraries and images before they are used.
 
 ## Database design
 
@@ -161,7 +169,7 @@ The details of each reward (the stats added, the monster captured) are already i
 | Column | Rule | Why |
 |---|---|---|
 | `player_id`, `slot` | primary key; `slot` is 1, 2 or 3 | At most three slots, one monster per slot |
-| `owned_monster_id` | UUID, not null | One of the player's monsters in the Monster Service |
+| `owned_monster_id` | text (up to 64 characters), not null | One of the player's monsters in the Monster Service. Stored as text because the ID belongs to another service |
 | | unique (`player_id`, `owned_monster_id`) | The same monster cannot fill two slots |
 
 When the player saves a team, the Encounter Service asks the Monster Service for the player's monsters and accepts the team only if it has exactly three different monsters that the player owns. It then replaces the three slots in one transaction.
@@ -181,12 +189,12 @@ The team lives here because it only exists to prepare encounters (US-14: "so tha
 | Column | Rule | Why |
 |---|---|---|
 | `id` | UUID, primary key | Sent with the reward request so the reward is applied once |
-| `player_id` | UUID, not null | Whose encounter |
+| `player_id` | text (up to 64 characters), not null | Whose encounter, copied from the token |
 | `challenge_id` | references `challenge` | Which challenge |
 | `status` | `open` or `closed` | An open encounter is waiting for the player's action |
 | | unique (`player_id`) where `status` is `open` | The database allows only one open encounter per player |
-| `team_snapshot` | JSON, not null | The three monsters with their stats when the encounter opened; history stays correct after rewards change the stats |
-| `wild_snapshot` | JSON, not null | The wild monster's stats used in the encounter |
+| `team_snapshot` | JSON, encrypted, not null | The three monsters with their stats when the encounter opened; history stays correct after rewards change the stats |
+| `wild_snapshot` | JSON, encrypted, not null | The wild monster's stats used in the encounter |
 | `team_power`, `challenge_power`, `p_win` | not null | The full calculation, so any result can be checked; also feeds the result and history pages (US-20, US-24) |
 | `p_capture` | nullable | Empty when the player already owns the wild monster, because capture is not offered |
 | `action` | `attack`, `capture` or `escape`; empty while open | What the player chose (US-21, US-22) |
@@ -194,6 +202,8 @@ The team lives here because it only exists to prepare encounters (US-14: "so tha
 | `result` | `win`, `loss`, `captured`, `failed` or `escaped`; empty while open | |
 | `reward_status` | `none`, `pending`, `applied` or `failed` | `pending`: not delivered yet, sent again before the player's next encounter. `failed`: the Monster Service refused it |
 | `created_at`, `closed_at` | timestamp | |
+
+The two snapshots are encrypted at rest (Lab 8). The Encounter Service encrypts them with Fernet before saving and decrypts them when reading, so the API answers are unchanged. A copy of the database files or of a backup shows only Fernet tokens. tls-init makes the key once and stores it in `encounter-service/data.key`, in the volume that only the Encounter Service mounts. encounter-db never sees the key, and it is never in git. The other columns stay readable because the database works with them: it searches by `player_id`, sorts by `created_at`, allows one open encounter per player, and checks the allowed values of `action`, `result` and `reward_status`. Fernet gives a different token each time, so the database could not compare encrypted values. Without the key the snapshots cannot be read, so tls-init never replaces an existing key; `docker compose down -v` deletes the key and the data together.
 
 ### Rules for all databases
 
@@ -251,13 +261,14 @@ Without a limit, the starter monsters would keep growing until they beat every m
 
 Allowing one open encounter per player needs no timers or cleanup jobs. Because the team is saved when the encounter opens, the chances the player sees are the ones that get rolled.
 
-### API changes to contracts C5, C7, C9 and C10 (issue #21)
+### API changes to contracts C5, C7, C8, C9 and C10 (issue #21)
 
 | Contract | Call | Change |
 |---|---|---|
 | C5 | `GET /team`, `PUT /team` | Move from the Monster Service to the Encounter Service, built by Hatem. `PUT /team` takes three owned monster IDs and returns 400 if the team breaks a rule |
 | C7 | `POST /encounters` with `{"challenge_id": ...}` | Opens the encounter and returns its ID, the wild monster, the team, `p_win` and `p_capture` (`null` when capture is not offered). It no longer returns the result. Returns 409 if the player has no valid team, 502 if the Monster Service is down or answers with an error, and 504 if it does not answer within 3 seconds |
 | C7 | `POST /encounters/{id}/action` with `{"action": "attack"}`, `"capture"` or `"escape"` | Resolves the encounter and returns the result. Returns 409 if the encounter is already closed or capture is not offered, and 404 if the encounter belongs to another player |
+| C8 | `GET /encounters`, `GET /encounters/{id}` | Built in the Encounter Service by Hatem instead of Tancredi, because the encounters are stored there. `GET /encounters` returns the player's finished encounters, newest first, at most 50. `GET /encounters/{id}` returns one encounter, open or closed, and 404 if it belongs to another player or does not exist. Both include `created_at` and `closed_at` in UTC |
 | C9 | `GET /internal/players/{id}/monsters` | Replaces `GET /internal/players/{id}/team`. Returns the player's owned monsters with their species, type and current ATK and HP. The Encounter Service uses it to check a team when it is saved, to read the stats when an encounter opens, and to decide whether to offer capture |
 | C10 | `POST /internal/rewards` | Two kinds of reward: stats (`owned_monster_ids` from the snapshot, `atk_bonus`, `hp_bonus`) or capture (`captured_species_id`). The Monster Service applies the +3 limit, because it owns the stats |
 
@@ -285,3 +296,4 @@ Allowing one open encounter per player needs no timers or cleanup jobs. Because 
 | A separate "progress" table (level, experience) | Not used; progress is the collection, the monsters' stats and the encounter history |
 | Gateway owner | Elisa |
 | Team (table, `GET /team`, `PUT /team`) | Encounter Service, built by Hatem; moved from the Monster Service on Elena's suggestion |
+| Data at rest in encounter-db | The team and wild snapshots are encrypted with Fernet in the Encounter Service; the key comes from tls-init, apart from the data (Lab 8) |

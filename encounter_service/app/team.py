@@ -13,13 +13,14 @@ MAX_ID_LENGTH = 64  # matches the database column
 
 
 def _monster_ids_from(body):
-    """Accept only {"monster_ids": [<text>, ...]}; anything else is None."""
+    """Accept only {"monster_ids": [<text>, ...]}; anything else is None.
+    An ID must be printable text (Lab 8): a control character is refused, not cleaned."""
     if not isinstance(body, dict):
         return None
     monster_ids = body.get("monster_ids")
     if not isinstance(monster_ids, list):
         return None
-    if not all(isinstance(i, str) and 0 < len(i) <= MAX_ID_LENGTH for i in monster_ids):
+    if not all(isinstance(i, str) and 0 < len(i) <= MAX_ID_LENGTH and i.isprintable() for i in monster_ids):
         return None
     return monster_ids
 

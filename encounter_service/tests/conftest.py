@@ -3,6 +3,7 @@ import threading
 
 import jwt
 import pytest
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from werkzeug.serving import make_server
@@ -187,6 +188,12 @@ class Game:
             f"/encounters/{encounter_id}/action", json={"action": action}, headers=self._token_for(player_id)
         )
 
+    def history(self, player_id):
+        return self._client.get("/encounters", headers=self._token_for(player_id))
+
+    def show(self, player_id, encounter_id):
+        return self._client.get(f"/encounters/{encounter_id}", headers=self._token_for(player_id))
+
 
 @pytest.fixture
 def game(client, token_for, monster_service):
@@ -262,6 +269,7 @@ def app(player_service_keys, monster_service, dice, database_uri):
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": database_uri,
             "JWT_PUBLIC_KEY": public_pem,
+            "DATA_KEY": Fernet.generate_key(),
         },
         monster_client=monster_service,
         draw=dice.roll,

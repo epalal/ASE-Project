@@ -1,6 +1,7 @@
 import os
 import secrets
 
+from cryptography.fernet import Fernet
 from flask import Flask, jsonify
 
 from .errors import register_error_handlers
@@ -18,7 +19,12 @@ def _settings_from_environment():
     if not public_key and env.get("JWT_PUBLIC_KEY_PATH"):
         with open(env["JWT_PUBLIC_KEY_PATH"], encoding="utf-8") as key_file:
             public_key = key_file.read()
+    data_key = None
+    if env.get("DATA_KEY_PATH"):
+        with open(env["DATA_KEY_PATH"], encoding="utf-8") as key_file:
+            data_key = key_file.read().strip()
     settings = {
+        "DATA_KEY": data_key,
         "SQLALCHEMY_DATABASE_URI": env.get("DATABASE_URL"),
         "JWT_PUBLIC_KEY": public_key,
         "MONSTER_SERVICE_URL": env.get("MONSTER_SERVICE_URL"),
@@ -35,11 +41,15 @@ def _settings_from_environment():
         "JWT_PUBLIC_KEY (or JWT_PUBLIC_KEY_PATH)": "JWT_PUBLIC_KEY",
         "MONSTER_SERVICE_URL": "MONSTER_SERVICE_URL",
         "INTERNAL_SERVICE_SECRET": "INTERNAL_SERVICE_SECRET",
+        "DATA_KEY_PATH": "DATA_KEY",
     }
     missing = [name for name, key in required.items() if not settings[key]]
     if missing:
         raise StartupError("The Encounter Service cannot start. Missing settings: " + ", ".join(missing))
     return settings
+
+
+MAX_BODY_BYTES = 10_000
 
 
 def create_app(test_config=None, monster_client=None, draw=None):
@@ -48,8 +58,14 @@ def create_app(test_config=None, monster_client=None, draw=None):
     `draw` returns a random number in [0, 1). Production uses the operating
     system's secure generator, so nobody can predict a roll; tests pass a fixed die."""
     app = Flask(__name__)
-    # Design rule 6: tokens are issued by the Player Service for this game.
-    app.config.from_mapping(JWT_ISSUER="player-service", JWT_AUDIENCE="monster-tamers")
+    app.config.from_mapping(
+        # Design rule 6: tokens are issued by the Player Service for this game.
+        JWT_ISSUER="player-service",
+        JWT_AUDIENCE="monster-tamers",
+        # Lab 8: our biggest request is a few hundred bytes, so a bigger body is
+        # refused with 413 before it is read.
+        MAX_CONTENT_LENGTH=MAX_BODY_BYTES,
+    )
     app.config.update(_settings_from_environment() if test_config is None else test_config)
 
     if monster_client is None:  # production: the real Monster Service over HTTPS
@@ -62,6 +78,8 @@ def create_app(test_config=None, monster_client=None, draw=None):
         )
     app.extensions["monster_client"] = monster_client
     app.extensions["draw"] = draw or secrets.SystemRandom().random
+    # Lab 8: the key that encrypts the stored encounter snapshots (models.EncryptedJSON).
+    app.extensions["fernet"] = Fernet(app.config["DATA_KEY"])
     register_error_handlers(app)
 
     from .challenges import load_challenges

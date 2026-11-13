@@ -4,10 +4,10 @@ info:
   version: 1.0.0
   description: |-
     Keeps each player's team of three monsters (US-14, US-15, US-16), lists the
-    challenges (US-17) and runs encounters (US-18, US-19, US-21, US-22). A player
-    opens an encounter against a challenge and then chooses one action: attack,
-    capture or escape. The roll happens here, on the server, with a secure random
-    generator.
+    challenges (US-17), runs encounters (US-18, US-19, US-21, US-22) and keeps their
+    history (US-23, US-24). A player opens an encounter against a challenge and then
+    chooses one action: attack, capture or escape. The roll happens here, on the
+    server, with a secure random generator.
 
     The service reads the player's monsters and the wild monster's stats from the
     Monster Service, and asks it to apply the reward after a win or a capture. It
@@ -29,6 +29,7 @@ tags:
   - name: Team
   - name: Challenges
   - name: Encounters
+  - name: History
 
 paths:
   /health:
@@ -104,7 +105,7 @@ paths:
                 monster_ids: ['101', '105', '109']
         '400':
           description: |-
-            - `invalid_input`: the body is not `{"monster_ids": [...]}` with each ID as text
+            - `invalid_input`: the body is not `{"monster_ids": [...]}` with each ID as printable text (no control characters)
             - `team_size`: not exactly three monsters
             - `duplicate_monster`: the same monster in two slots
             - `not_owned`: a monster the player does not own
@@ -121,6 +122,8 @@ paths:
                 message: A team can only use monsters you own.
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '409':
           $ref: '#/components/responses/Conflict'
         '502':
@@ -154,6 +157,43 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   /encounters:
+    get:
+      tags: [History]
+      summary: The player's previous encounters (US-23)
+      description: |-
+        The player's finished encounters, newest first, at most the 50 newest. An
+        encounter that is still open is not listed; read it with
+        GET /encounters/{encounter_id}.
+      operationId: listEncounters
+      responses:
+        '200':
+          description: The finished encounters, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncounterList'
+              example:
+                encounters:
+                  - id: a81f0e9f-4f6c-4a4f-879e-c59fa62958e5
+                    status: closed
+                    challenge_id: 12
+                    wild: {species_id: 12, name: Ashwing, type: fire, atk: 3, hp: 2}
+                    team:
+                      - {id: '101', species_id: 1, name: Sproutpaw, type: grass, atk: 2, hp: 2}
+                      - {id: '105', species_id: 5, name: Drifin, type: water, atk: 2, hp: 3}
+                      - {id: '109', species_id: 9, name: Emberbun, type: fire, atk: 3, hp: 2}
+                    team_power: 8.0
+                    challenge_power: 7.5
+                    p_win: 0.574442516811659
+                    p_capture: 0.43083188760874425
+                    action: attack
+                    roll: 0.35355065176014455
+                    result: win
+                    reward_status: applied
+                    created_at: '2026-11-07T15:02:11.481203+00:00'
+                    closed_at: '2026-11-07T15:02:14.907665+00:00'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Encounters]
       summary: Open an encounter against a challenge (US-18)
@@ -208,6 +248,8 @@ paths:
                 roll: null
                 result: null
                 reward_status: none
+                created_at: '2026-11-07T15:02:11.481203+00:00'
+                closed_at: null
         '400':
           description: '`invalid_input`: the body is not `{"challenge_id": <whole number from 1>}`'
           content:
@@ -220,6 +262,8 @@ paths:
                         const: invalid_input
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '404':
           description: '`challenge_not_found`: there is no challenge with this ID'
           content:
@@ -249,6 +293,42 @@ paths:
           $ref: '#/components/responses/MonsterServiceUnavailable'
         '504':
           $ref: '#/components/responses/MonsterServiceTimeout'
+
+  /encounters/{encounter_id}:
+    get:
+      tags: [History]
+      summary: One encounter of the player, open or finished (US-24)
+      operationId: getEncounter
+      parameters:
+        - name: encounter_id
+          in: path
+          required: true
+          description: The `id` returned when the encounter was opened
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The encounter, in the same shape as every other encounter answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Encounter'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: |-
+            `encounter_not_found`: the player has no encounter with this ID. An
+            encounter of another player gives the same answer, so nobody can learn
+            which IDs exist.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        const: encounter_not_found
 
   /encounters/{encounter_id}/action:
     post:
@@ -313,6 +393,8 @@ paths:
                 roll: 0.35355065176014455
                 result: win
                 reward_status: applied
+                created_at: '2026-11-07T15:02:11.481203+00:00'
+                closed_at: '2026-11-07T15:02:14.907665+00:00'
         '400':
           description: '`invalid_input`: the body is not `{"action": "attack"}`, `{"action": "capture"}` or `{"action": "escape"}`'
           content:
@@ -325,6 +407,8 @@ paths:
                         const: invalid_input
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '404':
           description: |-
             `encounter_not_found`: the player has no encounter with this ID. An
@@ -366,6 +450,16 @@ components:
         `aud` = monster-tamers and `iss` = player-service.
 
   responses:
+    TooLarge:
+      description: '`request_entity_too_large`: the body is bigger than 10 KB; it is refused before it is read'
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - properties:
+                  error:
+                    const: request_entity_too_large
     Unauthorized:
       description: '`unauthorized`: no token, or a token that is forged, expired, for another audience or issuer, or missing a claim'
       content:
@@ -426,7 +520,7 @@ components:
       type: string
       minLength: 1
       maxLength: 64
-      description: The ID of one monster the player owns, as the Monster Service's collection gives it, written as text
+      description: The ID of one monster the player owns, as the Monster Service's collection gives it, written as printable text
       examples: ['101']
 
     Team:
@@ -476,6 +570,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Challenge'
+
+    EncounterList:
+      type: object
+      required: [encounters]
+      properties:
+        encounters:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Encounter'
 
     OpenEncounterRequest:
       type: object
@@ -533,7 +637,7 @@ components:
 
     Encounter:
       type: object
-      required: [id, status, challenge_id, wild, team, team_power, challenge_power, p_win, p_capture, action, roll, result, reward_status]
+      required: [id, status, challenge_id, wild, team, team_power, challenge_power, p_win, p_capture, action, roll, result, reward_status, created_at, closed_at]
       properties:
         id:
           type: string
@@ -587,3 +691,11 @@ components:
             - `pending`: the Monster Service could not be reached; sent again before the next encounter
             - `applied`: the Monster Service applied the reward
             - `failed`: the Monster Service refused the reward; it is not sent again
+        created_at:
+          type: string
+          format: date-time
+          description: When the encounter was opened, in UTC
+        closed_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the action closed it, in UTC; null while it is open

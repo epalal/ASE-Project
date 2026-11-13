@@ -1,5 +1,7 @@
 """Challenge list (US-17), tested through the HTTP API."""
 
+from cryptography.fernet import Fernet
+
 from app import create_app
 
 # The 16 monsters of the roster slide, with the IDs of Elena's catalogue.
@@ -30,6 +32,7 @@ def test_restarting_the_service_does_not_load_the_challenges_twice(
         "TESTING": True,
         "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'encounter.db'}",
         "JWT_PUBLIC_KEY": public_pem,
+        "DATA_KEY": Fernet.generate_key(),
     }
     create_app(same_database, monster_client=monster_service)  # first start
     restarted = create_app(same_database, monster_client=monster_service)

@@ -8,7 +8,7 @@ services:
     volumes:
       - ./certs:/certs:ro
     environment:
-      DATABASE_URL: postgresql://monster_db:5432/monster_db
+      DATABASE_URL: postgresql://postgres@monster_db:5432/monster_db
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-test-internal-secret-key}
       JWT_PUBLIC_KEY: |
         -----BEGIN PUBLIC KEY-----

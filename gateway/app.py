@@ -144,7 +144,6 @@ def proxy_get_monsters():
         return failure
     return jsonify(data), 200
 
-
 @app.get("/monsters/<int:monster_id>")
 def proxy_get_monster_details(monster_id):
     """Returns the details of a specific monster (US-11)."""
@@ -152,7 +151,6 @@ def proxy_get_monster_details(monster_id):
     if failure is not None:
         return failure
     return jsonify(data), 200
-
 
 @app.get("/collection")
 def proxy_get_collection():
@@ -166,7 +164,6 @@ def proxy_get_collection():
         return failure
     return jsonify(data), 200
 
-
 @app.get("/internal/players/<string:player_id>/team")
 def proxy_get_player_team(player_id):
     """Returns the player's team and owned species IDs (C9)."""
@@ -178,7 +175,6 @@ def proxy_get_player_team(player_id):
     if failure is not None:
         return failure
     return jsonify(data), 200
-
 
 @app.post("/internal/rewards")
 def proxy_post_rewards():

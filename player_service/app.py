@@ -16,11 +16,15 @@ app = Flask(__name__)
 PRIVATE_KEY_PATH = "/certs/jwt_private.pem"
 PUBLIC_KEY_PATH = "/certs/jwt_public.pem"
 
-with open(PRIVATE_KEY_PATH, 'r') as f:
-    PRIVATE_KEY = f.read()
-
-with open(PUBLIC_KEY_PATH, 'r') as f:
-    PUBLIC_KEY = f.read()
+def get_keys():
+    try:
+        with open(PRIVATE_KEY_PATH, 'r') as f:
+            private_key = f.read()
+        with open(PUBLIC_KEY_PATH, 'r') as f:
+            public_key = f.read()
+        return private_key, public_key
+    except FileNotFoundError:
+        return None, None
 
 db_lock = threading.Lock()
 
@@ -91,8 +95,12 @@ def login():
         
         user = session.query(User).filter_by(username=username).first()
 
-        if not user or not checkpw(password.encode('utf-8'), password.encode('utf-8')):
+        if not user or not checkpw(password.encode('utf-8'), user.password_hashed.encode('utf-8')):
             return error("unauthorized", "Invalid username or password", status=401)
+        
+        private_key, _ = get_keys()
+        if not private_key:
+            return error("server_error", "JWT signing keys not available", status=500)
 
         token = jwt.encode(
             {
@@ -102,7 +110,7 @@ def login():
                 "exp": int(time.time()) + 3600,
                 "username": username
             },
-            PRIVATE_KEY,
+            private_key,
             algorithm="RS256"
         )
 

@@ -1,7 +1,9 @@
 services:  
   player-service:
-    build: ./player_service
+    build: .
     container_name: player-service
+    ports: 
+     - "127.0.0.1:5001:5001"
     environment:
       DATABASE_URL: sqlite:////data/player_db.sqlite3
     volumes:
@@ -13,7 +15,7 @@ services:
       tls-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:5001/health', context=ctx, timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -1,5 +1,8 @@
-Flask>=3.1,<4
-SQLAlchemy>=2.0,<3
-bcrypt>=4,<6
-PyJWT>=2.10,<3
-pytest>=8.4,<9
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+bcrypt==4.1.2
+psycopg2-binary==2.9.9
+PyJWT==2.8.0
+cryptography==42.0.5
+gunicorn==22.0.0
+pytest==8.1.1

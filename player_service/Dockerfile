@@ -1,15 +1,17 @@
 FROM python:3.12-slim
 
-WORKDIR /project
+WORKDIR /player_service
 
-# Copy dependency metadata first so this step can be cached independently
-# from changes to the application source code.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Source code changes now invalidate only this later copy step.
 COPY . .
+
+RUN useradd -m -r appuser && \
+    chown -R appuser:appuser /player_service
+
+USER appuser
 
 EXPOSE 5001
 
-CMD ["flask", "--app", "app", "run", "--host=0.0.0.0", "--port=5001", "--cert=/certs/server.pem", "--key=/certs/server.key"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--certfile", "/certs/server.pem", "--keyfile", "/certs/server.key", "app:app"]

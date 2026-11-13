@@ -4,8 +4,8 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-AUTH_URL = os.environ.get("AUTH_URL", "http://localhost:5001").rstrip("/")
-MONSTER_URL = os.environ.get("MONSTER_URL", "http://localhost:5002").rstrip("/")
+AUTH_URL = os.environ.get("AUTH_URL", "https://localhost:5001").rstrip("/")
+MONSTER_URL = os.environ.get("MONSTER_URL", "https://localhost:5002").rstrip("/")
 ENCOUNTER_URL = os.environ.get("ENCOUNTER_URL", "https://encounter-service:5003").rstrip("/")
 REQUEST_TIMEOUT = 3
 
@@ -26,7 +26,7 @@ def downstream_failure(response):
 
 def forward(method, url, **kwargs):
     try:
-        res = requests.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
+        res = requests.request(method, url, timeout=REQUEST_TIMEOUT, verify=False, **kwargs)
         if res.status_code >= 400:
             return None, downstream_failure(res)
         
@@ -198,4 +198,4 @@ def health():
     return jsonify(status="ok"), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005)
+    app.run(host='0.0.0.0', port=5005, ssl_context=("/certs/server.pem", "/certs/server.key"))

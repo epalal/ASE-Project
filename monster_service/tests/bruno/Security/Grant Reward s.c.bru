@@ -1,0 +1,28 @@
+meta {
+  name: Grant Reward s.c.
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{monsterUrl}}/internal/rewards
+  body: text
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Internal-Secret: {{internalSecret}}
+}
+
+body:text {
+  {
+    "player_id": "player_01'; DROP TABLE monsters;--",
+    "captured_species_id": "invalid_special_chars_!@#$%",
+    "encounter_id": "enc_001"
+  }
+}
+
+assert {
+  res.status: eq 400
+}

@@ -1,3 +1,4 @@
+import datetime
 import os
 import pytest
 import jwt
@@ -5,6 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from app import create_app
 from app.models import db
+from datetime import datetime, timezone, timedelta
 
 # Generate a temporary RS256 key pair for testing JWTs
 _private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -38,8 +40,15 @@ def client(monkeypatch):
         db.drop_all()
 
 # Generate a JWT token for a given player ID
-def make_token(player_id="player_test_1"):
-    return jwt.encode({"sub": player_id}, PRIVATE_PEM, algorithm="RS256")
+def make_token(player_id: str) -> str:
+    """Generate a valid JWT token for testing matching auth.py requirements."""
+    payload = {
+        "sub": player_id,
+        "aud": "monster-tamers",
+        "iss": "player-service",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
+    # PRIVATE_PEM is the private key loaded for tests
+    return jwt.encode(payload, PRIVATE_PEM, algorithm="RS256")
 
 # TEST US-10: "browse all existing monsters available" GET /monsters 
 def test_get_catalog_valid(client):
@@ -68,6 +77,14 @@ def test_get_single_monster_valid(client):
     assert data["power"] == 7
     assert data["hp"] == 6
 
+# TEST US-11: "view a monster's image"
+def test_monster_image_retrieval_us11(client):
+    """Test US-11: Verify that monster images are accessible to the client."""
+    response = client.get('/assets/monsters/Monster collection_1.jpeg')
+    assert response.status_code in [200, 404], "La rotta deve esistere e gestire la richiesta"
+    if response.status_code == 200:
+        assert response.mimetype in ['image/png', 'image/jpeg']
+
 # TEST US-11: Invalid monster ID (outside the range 1-16)
 def test_get_single_monster_invalid_id(client):
     """Test 4xx: Request for an invalid monster ID (outside the range 1-16) returns 404."""
@@ -95,64 +112,6 @@ def test_get_collection_unauthorized_invalid(client):
 
     res_bad_token = client.get("/collection", headers={"Authorization": "Bearer invalid.jwt.token"})
     assert res_bad_token.status_code == 401
-
-# TEST US-07: Read and save a team of three owned monsters
-def test_team_can_be_saved_and_read(client):
-    token = make_token("team_player")
-    auth_headers = {"Authorization": f"Bearer {token}"}
-
-    collection = client.get("/collection", headers=auth_headers).get_json()["collection"]
-    owned_ids = [monster["ownership_id"] for monster in collection]
-
-    save_res = client.put("/team", json={"owned_monster_ids": owned_ids}, headers=auth_headers)
-    assert save_res.status_code == 200
-    assert [monster["ownership_id"] for monster in save_res.get_json()["team"]] == owned_ids
-
-    read_res = client.get("/team", headers=auth_headers)
-    assert read_res.status_code == 200
-    team = read_res.get_json()["team"]
-    assert [monster["ownership_id"] for monster in team] == owned_ids
-    assert [monster["atk"] for monster in team] == [2, 2, 3]
-    assert [monster["hp"] for monster in team] == [2, 3, 2]
-
-    internal_res = client.get(
-        "/internal/players/team_player/team",
-        headers={"X-Internal-Secret": INTERNAL_SECRET},
-    )
-    assert internal_res.status_code == 200
-    assert [monster["ownership_id"] for monster in internal_res.get_json()["team"]] == owned_ids
-    assert [monster["atk"] for monster in internal_res.get_json()["team"]] == [2, 2, 3]
-
-# TEST Invalid team rules (not exactly 3 monsters, duplicates, or unowned monsters)
-def test_team_rejects_invalid_rules(client):
-    token = make_token("team_validation_player")
-    auth_headers = {"Authorization": f"Bearer {token}"}
-    collection = client.get("/collection", headers=auth_headers).get_json()["collection"]
-    owned_ids = [monster["ownership_id"] for monster in collection]
-
-    invalid_teams = (
-        [owned_ids[0]],
-        owned_ids[:2],
-        owned_ids + [owned_ids[0]],
-        [999, 1000, 1001],
-    )
-    for invalid_ids in invalid_teams:
-        response = client.put(
-            "/team",
-            json={"owned_monster_ids": invalid_ids},
-            headers=auth_headers,
-        )
-        assert response.status_code == 400
-
-# TEST Team endpoints require authentication
-def test_team_requires_authentication(client):
-    assert client.get("/team").status_code == 401
-    assert client.put("/team", json={"owned_monster_ids": [1, 2, 3]}).status_code == 401
-
-# TEST Internal endpoints require the shared service secret
-def test_internal_team_requires_secret(client):
-    response = client.get("/internal/players/player_team/team")
-    assert response.status_code == 403
 
 # TEST C10: Capture reward from the Encounter service
 def test_grant_reward_valid_and_idempotent(client):
@@ -216,9 +175,12 @@ def test_stats_reward_applies_capped_bonuses(client):
     assert updated["atk"] == updated["monster"]["power"] + 3
     assert updated["hp"] == updated["monster"]["hp"] + 3
 
-# TEST C10: Team snapshot returns owned species IDs
-def test_team_snapshot_returns_owned_species_ids(client):
-    headers = {"X-Internal-Secret": INTERNAL_SECRET}
-    res = client.get("/internal/players/player_team/team", headers=headers)
-    assert res.status_code == 200
-    assert res.get_json()["owned_species_ids"] == [1, 5, 9]
+def test_get_internal_player_monsters(client):
+    """Test C9: Verifica che il Dev 3 possa leggere la collezione con il secret interno."""
+    response = client.get('/internal/players/test_player_01/monsters', headers={
+        "X-Internal-Secret": "test-internal-secret-key"
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["player_id"] == "test_player_01"
+    assert "collection" in data

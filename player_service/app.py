@@ -109,7 +109,7 @@ def login():
 
         token = jwt.encode(
             {
-                "sub": user.id, 
+                "sub": str(user.id), 
                 "aud": "monster-tamers", 
                 "iss": "player-service",
                 "exp": int(time.time()) + 3600,

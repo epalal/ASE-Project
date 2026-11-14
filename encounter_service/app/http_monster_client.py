@@ -34,7 +34,7 @@ class HttpMonsterClient:
 
     def get_player_monsters(self, player_id):
         """C9: same body as the Monster Service's /collection, for any player."""
-        body = self._get(f"/internal/players/{quote(player_id, safe='')}/monsters")
+        body = self._get(f"/internal/players/{quote(str(player_id), safe='')}/monsters")
         return [
             OwnedMonster(
                 id=str(owned["ownership_id"]),

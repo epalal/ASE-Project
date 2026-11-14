@@ -6,3 +6,4 @@ cryptography==49.0.0
 requests==2.31.0
 gunicorn==22.0.0
 pytest==9.0.3
+flask-cors

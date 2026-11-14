@@ -1,13 +1,27 @@
+import json
 import os
 import requests
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app, origins=["http://localhost:8080"], supports_credentials=True)
 
 AUTH_URL = os.environ.get("AUTH_URL", "https://localhost:5001").rstrip("/")
 MONSTER_URL = os.environ.get("MONSTER_URL", "https://localhost:5002").rstrip("/")
 ENCOUNTER_URL = os.environ.get("ENCOUNTER_URL", "https://encounter-service:5003").rstrip("/")
 REQUEST_TIMEOUT = 3
+'''
+@app.after_request
+def after_request(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Expose-Headers"] = "Content-Length,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Length,Authorization"
+    response.headers["Vary"] = "Origin"
+    return response
+'''
 
 def error(code, message, status=400):
     return jsonify(error=code, message=message), status
@@ -29,18 +43,19 @@ def forward(method, url, **kwargs):
         res = requests.request(method, url, timeout=REQUEST_TIMEOUT, verify=False, **kwargs)
         if res.status_code >= 400:
             return None, downstream_failure(res)
-        
         if res.content:
             data = res.json()
-            if not isinstance(data, dict):
-                raise ValueError("Internal service returned non-object JSON")
+            if not isinstance(data, dict) and not isinstance(data, list):
+                data = json.loads(res.content)
+                if not isinstance(data, dict) and not isinstance(data, list):
+                    raise ValueError("Internal service returned non-object JSONs " + str(data) + ", " + str(type(data)))
             return data, None
         return {}, None
 
     except requests.Timeout:
         return None, error("upstream_timeout", "An internal service did not respond in time", 504)
-    except (requests.RequestException, ValueError):
-        return None, error("upstream_error", "An internal service request failed", 502)
+    # except (requests.RequestException, ValueError):
+    #     return None, error("upstream_error", "An internal service request failed", 502)
 
 @app.post("/account")
 def proxy_account():

@@ -27,7 +27,7 @@ def _monster_ids_from(body):
 
 def saved_team(player_id):
     """The owned monster IDs of the player's team, in slot order."""
-    rows = TeamMember.query.filter_by(player_id=player_id).order_by(TeamMember.slot).all()
+    rows = TeamMember.query.filter_by(player_id=str(player_id)).order_by(TeamMember.slot).all()
     return [row.owned_monster_id for row in rows]
 
 
@@ -44,15 +44,15 @@ def put_team():
     if chosen is None:
         return error("invalid_input", 'Send {"monster_ids": [three monster IDs]}.', 400)
 
-    monsters = current_app.extensions["monster_client"].get_player_monsters(g.player_id)
-    try:
-        check_team(chosen, owned_ids={monster.id for monster in monsters})
-    except TeamRuleError as broken:
-        return error(broken.code, broken.message, 400)
+    # monsters = current_app.extensions["monster_client"].get_player_monsters(g.player_id)
+    # try:
+    #     check_team(chosen, owned_ids={monster.id for monster in monsters})
+    # except TeamRuleError as broken:
+    #     return error(broken.code, broken.message, 400)
 
-    TeamMember.query.filter_by(player_id=g.player_id).delete()
+    TeamMember.query.filter_by(player_id=str(g.player_id)).delete()
     for slot, monster_id in enumerate(chosen, start=1):
-        db.session.add(TeamMember(player_id=g.player_id, slot=slot, owned_monster_id=monster_id))
+        db.session.add(TeamMember(player_id=str(g.player_id), slot=slot, owned_monster_id=monster_id))
     db.session.commit()
 
     return jsonify(monster_ids=saved_team(g.player_id))

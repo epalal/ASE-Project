@@ -16,7 +16,7 @@ Monster Tamers is a web game built as microservices for the Advanced Software En
 | `auth_service/` | Player Service: accounts, login, login tokens | Elisa |
 | `monster_service/` | Monster Service: catalogue, players' monsters, rewards | Elena |
 | `encounter_service/` | Encounter Service: team, challenges, encounters | Hatem |
-| (not in the repo yet) | Web frontend | Tancredi |
+| `frontend_service/` | Web frontend | Tancredi |
 
 Shared parts:
 
@@ -62,5 +62,10 @@ python -m pytest
 ### API tests with Bruno
 See [tests/bruno/README.md](tests/bruno/README.md).
 
-### The whole application
-We are putting the full stack together in `docker-compose.yaml`, with every service behind the gateway over HTTPS. Until then, each service runs on its own with its stubs, as above.
+### How to start
+Run the backend with `docker compose up`, and then run the front-end with
+```
+cd frontend_service
+docker compose up
+```
+Visit localhost:8080/ to access the application.

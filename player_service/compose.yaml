@@ -10,7 +10,7 @@ services:
     build: .
     container_name: player-service
     ports: 
-     - "127.0.0.1:5001:5001"
+     - "127.0.0.1:5001:5005"
     environment:
       DATABASE_URL: sqlite:////data/player_db.sqlite3
     volumes:

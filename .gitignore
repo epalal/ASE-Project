@@ -4,7 +4,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
-*.json
+users_data.json
 
 # Secrets: never commit these (design rule 7)
 .env

@@ -1,0 +1,8 @@
+services:
+  file-server:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - ./files:/srv/files:ro
+    restart: unless-stopped

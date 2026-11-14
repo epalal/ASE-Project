@@ -2,106 +2,386 @@ openapi: 3.1.0
 info:
   title: ASE Operations API
   version: 1.0.0
-  description: Public Lab 4 operations contract, preserved by the API Gateway. The gateway forwards
-    operations to calc/string and reads history. Downstream failures are reported as 502 or 504.
+  description: Gateway API to connect user services
 servers:
 - url: http://localhost:5005
 paths:
-  /operations:
+  /account:
     post:
-      summary: Execute an operation
-      description: Executes one supported operation. Only successful operations replace the value
-        returned by GET /operations/last.
-      operationId: executeOperation
+      summary: Create a new user account
+      description: Registers a new user with a unique username and hashed password.
+      operationId: Account
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OperationRequest'
-            examples:
-              division:
-                value:
-                  type: div
-                  arguments:
-                  - 10
-                  - 2
-              concatenation:
-                value:
-                  type: concat
-                  arguments:
-                  - hello
-                  - world
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
       responses:
-        '200':
-          description: Operation executed successfully
+        '201':
+          description: Account created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResult'
-              examples:
-                division:
-                  value:
-                    operation: div
-                    arguments:
-                    - 10
-                    - 2
-                    result: 5
+                type: object
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
         '400':
-          description: Invalid request, invalid arguments, or unsupported operation
+          description: Invalid request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                divisionByZero:
-                  value:
-                    error: division_by_zero
-                    message: The divisor cannot be zero
         '502':
-          description: Internal service failure or history notification failed
+          description: Upstream service error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '504':
-          description: Timeout in a dependent service
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /operations/last:
-    get:
-      summary: Retrieve the last successful operation
-      operationId: getLastOperation
+
+  /login:
+    post:
+      summary: User login
+      description: Authenticates a user and returns a session token.
+      operationId: userLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
       responses:
         '200':
-          description: Last successful operation
+          description: Login successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OperationResult'
-        '404':
-          description: No successful operation has been executed yet
+                type: object
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
+                  token:
+                    type: string
+        '400':
+          description: Invalid request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                error: no_previous_operation
-                message: No successful operation has been executed yet
         '502':
-          description: History service unavailable
+          description: Upstream service error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '504':
-          description: History service timeout
+  /team:
+    get:
+      summary: Get player team
+      description: Retrieves the monster IDs in the player's current team.
+      operationId: getTeam
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Team retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monster_ids:
+                    type: array
+                    items:
+                      type: integer
+        '400':
+          description: Invalid request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update player team
+      description: Updates the player's team with the specified monster IDs.
+      operationId: updateTeam
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - monster_ids
+              properties:
+                monster_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Team updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monster_ids:
+                    type: array
+                    items:
+                      type: integer
+        '400':
+          description: Invalid request or team rule error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                
+  /challenges:
+    get:
+      summary: List challenges
+      description: Retrieves a list of all available challenges.
+      operationId: listChallenges
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Challenges retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenges:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        description:
+                          type: string
+                        wild_species_id:
+                          type: integer
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /encounters:
+    post:
+      summary: Open encounter
+      description: Opens a new encounter for a given challenge.
+      operationId: openEncounter
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - challenge_id
+              properties:
+                challenge_id:
+                  type: integer
+      responses:
+        '201':
+          description: Encounter opened successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Challenge not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict (e.g., no team)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /encounters/{encounter_id}/action:
+    post:
+      summary: Choose action in encounter
+      description: Sends an action for an active encounter.
+      operationId: chooseAction
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+        - in: path
+          name: encounter_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+      responses:
+        '200':
+          description: Action processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Encounter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Encounter closed or conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /monsters:
+    get:
+      summary: Get all monsters
+      description: Retrieves the complete catalog of monsters.
+      operationId: getMonsters
+      responses:
+        '200':
+          description: Monsters retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Monster'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /monsters/{monster_id}:
+    get:
+      summary: Get monster details
+      description: Retrieves details of a specific monster.
+      operationId: getMonsterDetails
+      parameters:
+        - in: path
+          name: monster_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Monster details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Monster'
+        '404':
+          description: Monster not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /health:
     get:
       summary: Gateway liveness check
@@ -119,63 +399,15 @@ paths:
                     const: ok
               example:
                 status: ok
+
 components:
   schemas:
-    OperationRequest:
-      type: object
-      required:
-      - type
-      - arguments
-      properties:
-        type:
-          type: string
-          enum:
-          - add
-          - div
-          - upper
-          - concat
-          description: Operation to execute.
-        arguments:
-          type: array
-          minItems: 1
-          maxItems: 2
-          items:
-            oneOf:
-            - type: number
-            - type: string
-          description: add and div require two numbers; upper requires one string; concat requires
-            two strings.
-    OperationResult:
-      type: object
-      additionalProperties: false
-      required:
-      - operation
-      - arguments
-      - result
-      properties:
-        operation:
-          type: string
-          enum:
-          - add
-          - div
-          - upper
-          - concat
-        arguments:
-          type: array
-          items:
-            oneOf:
-            - type: number
-            - type: string
-        result:
-          oneOf:
-          - type: number
-          - type: string
     Error:
       type: object
       additionalProperties: false
       required:
-      - error
-      - message
+        - error
+        - message
       properties:
         error:
           type: string

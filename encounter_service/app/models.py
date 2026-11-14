@@ -1,10 +1,33 @@
 """encounter-db tables (docs/architecture.md, "encounter-db")."""
 
+import json
+
+from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.types import Text, TypeDecorator
 
 from . import rules
 
 db = SQLAlchemy()
+
+
+class EncryptedJSON(TypeDecorator):
+    """Lab 8, data at rest: JSON stored as a Fernet token, so a copy of the
+    database is unreadable without the service's data key. The code reads and
+    writes plain JSON; create_app makes the Fernet from the key."""
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return current_app.extensions["fernet"].encrypt(json.dumps(value).encode()).decode()
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return json.loads(current_app.extensions["fernet"].decrypt(value.encode()))
 
 
 class TeamMember(db.Model):
@@ -37,7 +60,9 @@ class Challenge(db.Model):
 
 class Encounter(db.Model):
     """One encounter. The snapshots keep the stats used at the time, so the
-    history stays right after rewards change the monsters."""
+    history stays right after rewards change the monsters. They are encrypted;
+    the other columns stay readable because the database searches, sorts and
+    checks them (one open encounter per player, the allowed results)."""
 
     __tablename__ = "encounter"
 
@@ -45,8 +70,8 @@ class Encounter(db.Model):
     player_id = db.Column(db.String(64), nullable=False, index=True)
     challenge_id = db.Column(db.Integer, db.ForeignKey("challenge.id"), nullable=False)
     status = db.Column(db.String(8), nullable=False)
-    team_snapshot = db.Column(db.JSON, nullable=False)
-    wild_snapshot = db.Column(db.JSON, nullable=False)
+    team_snapshot = db.Column(EncryptedJSON, nullable=False)
+    wild_snapshot = db.Column(EncryptedJSON, nullable=False)
     team_power = db.Column(db.Float, nullable=False)
     challenge_power = db.Column(db.Float, nullable=False)
     p_win = db.Column(db.Float, nullable=False)

@@ -5,6 +5,7 @@ import stat
 
 import jwt
 import pytest
+from cryptography.fernet import Fernet
 
 from app.http_monster_client import HttpMonsterClient
 from app.monster_client import MonsterServiceUnavailable, Species
@@ -86,6 +87,21 @@ def test_starting_again_keeps_the_authority_and_the_token_keys(tls):
 
 def _permissions(path):
     return stat.S_IMODE(path.stat().st_mode)
+
+
+# Lab 8: the key that encrypts the stored encounters. Lose it and the encounters
+# can no longer be read, so a restart must keep it.
+def test_only_the_encounter_service_gets_a_data_key_and_a_restart_keeps_it(tls):
+    data_key = tls / "encounter-service" / "data.key"
+    key_before = data_key.read_bytes()
+
+    make_certs(tls, services=["monster-service", "encounter-service", "player-service"])
+
+    Fernet(key_before)  # raises if it is not a Fernet key
+    assert data_key.read_bytes() == key_before
+    assert _permissions(data_key) == 0o640  # like the other service keys
+    assert not (tls / "monster-service" / "data.key").exists()
+    assert not (tls / "player-service" / "data.key").exists()
 
 
 def test_private_keys_can_be_read_only_by_their_owner_and_the_certificate_group(tls):

@@ -2,7 +2,10 @@
 # A failing test turns the run red. To add a service, add its name to the matrix:
 #   unit:       a folder with requirements-dev.txt and its pytest tests
 #   component:  compose.<name>.yaml, a compose service <name>-service, and the Bruno
-#               folders <name> and <name>-stub with the environment <name>-component
+#               folders <name>, <name>-stub and <name>-security (hostile input, Lab 8)
+#               with the environment <name>-component
+#   security:   a folder with Python code and its requirements*.txt (Lab 9)
+#   images:     a folder with a Dockerfile (Lab 9)
 name: CI
 
 on:
@@ -75,7 +78,7 @@ jobs:
 
       - name: Component tests
         working-directory: tests/bruno
-        run: bru run ${{ matrix.service }} ${{ matrix.service }}-stub --env ${{ matrix.service }}-component --cacert ca.pem
+        run: bru run ${{ matrix.service }} ${{ matrix.service }}-stub ${{ matrix.service }}-security --env ${{ matrix.service }}-component --cacert ca.pem
 
       - name: Show the logs
         if: failure()
@@ -84,3 +87,85 @@ jobs:
       - name: Stop the service
         if: always()
         run: docker compose -f compose.${{ matrix.service }}.yaml down -v
+
+  # Lab 9: our code (Bandit) and the libraries we use (pip-audit).
+  security:
+    name: Code and libraries (${{ matrix.folder }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: [encounter_service, tls_init, monster_stub, player_stub]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit and pip-audit
+        run: pip install bandit==1.8.3 pip-audit==2.9.0
+
+      - name: Bandit (a medium or high finding fails the job)
+        run: bandit -r ${{ matrix.folder }} -x ./${{ matrix.folder }}/tests --severity-level medium
+
+      - name: pip-audit (a library with a known vulnerability fails the job)
+        run: |
+          for file in ${{ matrix.folder }}/requirements*.txt; do
+            pip-audit -r "$file"
+          done
+
+  # Lab 9: the images we ship have no critical or high vulnerability that already has a fix.
+  images:
+    name: Image (${{ matrix.folder }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: [encounter_service, encounter_service/db, tls_init, monster_stub, player_stub]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Build the image on the newest base image
+        run: docker build --pull -t ci-image ./${{ matrix.folder }}
+
+      - name: Vulnerabilities in the image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ci-image
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          version: v0.76.1
+
+      - name: Misconfigurations in the Dockerfile
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: ${{ matrix.folder }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          version: v0.76.1
+
+  # Lab 9: no key, token or password committed anywhere in the repository.
+  secrets:
+    name: Committed secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Secret scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          exit-code: "1"
+          version: v0.76.1

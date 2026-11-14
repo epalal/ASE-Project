@@ -1,0 +1,201 @@
+openapi: 3.1.0
+
+info:
+  title: ASE Project - Monster Tamer
+  version: 1.0.0
+  description: API for management of sign in and login operations.
+
+servers:
+  - url: http://localhost:5001
+
+paths:
+  /account:
+    post:
+      summary: Create a new user account
+      description: This endpoint allows the creation of a new user account.
+      operationId: Account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: The username for the new account.
+                password:
+                  type: string
+                  description: The password for the new account.
+              required:
+                - username
+                - password
+            example:
+              username: new_user
+              password: new_password
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
+                  id:
+                    type: string
+              example:
+                message: Account created successfully
+                username: new_user
+                id: 123e4567-e89b-12d3-a456-426614174000
+        '400':
+          description: Invalid input or request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: invalid_input
+                message: Username and password must be strings
+        '409':
+          description: Conflict (e.g., user already exists)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: user_exists
+                message: Username already exists
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: server_error
+                message: Could not save user data
+
+  /login:
+    post:
+      summary: Log in to an existing account
+      description: This endpoint allows a user to log in to their account.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: The username of the account.
+                password:
+                  type: string
+                  description: The password of the account.
+              required:
+                - username
+                - password
+            example:
+              username: test_user
+              password: test_password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  username:
+                    type: string
+                  id:
+                    type: string
+                  token:
+                    type: string
+              example:
+                message: Successful login
+                username: test_user
+                id: 123e4567-e89b-12d3-a456-426614174000
+                token: 123e4567-e89b-12d3-a456-426614174001
+        '400':
+          description: Invalid input or request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: invalid_input
+                message: Username and password must be strings
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: unauthorized
+                message: Invalid username or password
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+              example:
+                error: server_error
+                message: An unexpected error occurred
+
+  /health:
+    get:
+      summary: Check the health of the service
+      description: This endpoint checks if the service is running and healthy.
+      operationId: health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+              example:
+                status: healthy

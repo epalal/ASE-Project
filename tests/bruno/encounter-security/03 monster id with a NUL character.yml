@@ -1,0 +1,30 @@
+info:
+  name: monster id with a NUL character
+  type: http
+  seq: 3
+
+http:
+  method: PUT
+  url: "{{encounterUrl}}/team"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: text
+    data: |-
+      {"monster_ids": ["101\u0000", "105", "109"]}
+  auth:
+    type: bearer
+    token: "{{tokenA}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+    - expression: res.body.error
+      operator: eq
+      value: "invalid_input"
+
+settings:
+  encodeUrl: true

@@ -3,6 +3,7 @@
 
 import jwt
 import pytest
+from cryptography.fernet import Fernet
 
 from app import create_app
 from make_certs import make_certs
@@ -27,6 +28,7 @@ def test_a_token_from_the_player_stub_is_accepted_by_the_encounter_service(tls, 
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": "sqlite://",
             "JWT_PUBLIC_KEY": (tls / "encounter-service" / "jwt_public.pem").read_text(),
+            "DATA_KEY": Fernet.generate_key(),
         },
         monster_client=monster_service,
     ).test_client()

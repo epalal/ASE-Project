@@ -13,6 +13,9 @@ Each folder below OUT is one Docker volume, mounted only by the service it belon
                        the key that checks login tokens (design rule 6)
   player-service/jwt_private.pem
                        the key that signs login tokens: only the Player Service gets it
+  encounter-service/data.key
+                       the Fernet key that encrypts the stored encounters (Lab 8):
+                       only the Encounter Service gets it, never its database
 
 Every service runs as its own non-root user. A service's private keys can be read
 by their owner (tls-init) and by the certificate group, which each service joins in
@@ -25,6 +28,7 @@ import os
 from pathlib import Path
 
 from cryptography import x509
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
@@ -39,6 +43,7 @@ SERVICES = [
     "encounter-db",
 ]
 TOKEN_SIGNER = "player-service"  # the only service that may create login tokens
+ENCRYPTS_ITS_RECORDS = {"encounter-service"}  # Lab 8: each gets its own data key
 VALID_DAYS = 365
 SERVICE_KEY_MODE = 0o640  # owner and the certificate group
 AUTHORITY_KEY_MODE = 0o600  # tls-init alone
@@ -187,6 +192,9 @@ def make_certs(out, services=SERVICES):
                 (authority_folder / "jwt_private.pem").read_bytes(),
                 SERVICE_KEY_MODE,
             )
+        # Made once and never replaced: a new key could not read what the old one encrypted.
+        if service in ENCRYPTS_ITS_RECORDS and not (folder / "data.key").exists():
+            _write_secret(folder / "data.key", Fernet.generate_key(), SERVICE_KEY_MODE)
 
 
 if __name__ == "__main__":

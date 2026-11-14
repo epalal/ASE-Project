@@ -1,0 +1,14 @@
+Useful cmd for teminal
+
+# To enter the folder
+>> cd monster_service
+
+# To activate the venv
+>> .venv\Scripts\Activate.ps1
+
+# To start tests (must be in venv + folder monster_service)
+>> python -m pytest -v                                 
+
+# To start Docker and Bruno
+>> docker compose -f docker-compose.yaml down
+>> docker compose -f docker-compose.yaml up -d --wait

@@ -17,7 +17,6 @@ class User(Base):
 DATABASE_URL = "sqlite:///player_db.sqlite3"
 engine = create_engine(DATABASE_URL, echo=True)
 SessionLocal = sessionmaker(bind=engine)
-Base.metadata.create_all(engine)
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)

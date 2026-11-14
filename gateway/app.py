@@ -4,8 +4,13 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
+<<<<<<< Updated upstream
 AUTH_URL = os.environ.get("AUTH_URL", "http://localhost:5001").rstrip("/")
 MONSTER_URL = os.environ.get("MONSTER_URL", "http://localhost:5002").rstrip("/")
+=======
+AUTH_URL = os.environ.get("AUTH_URL", "https://localhost:5001").rstrip("/")
+MONSTER_URL = os.environ.get("MONSTER_URL", "https://monster:5002").rstrip("/")
+>>>>>>> Stashed changes
 ENCOUNTER_URL = os.environ.get("ENCOUNTER_URL", "https://encounter-service:5003").rstrip("/")
 REQUEST_TIMEOUT = 3
 
@@ -29,18 +34,19 @@ def forward(method, url, **kwargs):
         res = requests.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
         if res.status_code >= 400:
             return None, downstream_failure(res)
-        
+        print(res)
         if res.content:
+            print(res.content)
             data = res.json()
             if not isinstance(data, dict):
-                raise ValueError("Internal service returned non-object JSON")
+                raise ValueError("Internal service returned non-object JSON: " + str(res.content) + ", " + str(type(res.content)))
             return data, None
         return {}, None
 
     except requests.Timeout:
         return None, error("upstream_timeout", "An internal service did not respond in time", 504)
-    except (requests.RequestException, ValueError):
-        return None, error("upstream_error", "An internal service request failed", 502)
+    # except (requests.RequestException, ValueError):
+    #     return None, error("upstream_error", "An internal service request failed", 502)
 
 @app.post("/account")
 def proxy_account():

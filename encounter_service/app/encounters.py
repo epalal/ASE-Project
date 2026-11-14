@@ -84,7 +84,7 @@ def open_encounter():
     monster_client = current_app.extensions["monster_client"]
 
     # Rewards that could not be delivered earlier go first, so this fight uses the new stats.
-    for waiting in Encounter.query.filter_by(player_id=g.player_id, reward_status="pending").all():
+    for waiting in Encounter.query.filter_by(player_id=str(g.player_id), reward_status="pending").all():
         _grant_reward(waiting)
     db.session.commit()
 

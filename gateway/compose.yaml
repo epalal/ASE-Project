@@ -1,18 +1,27 @@
 services:
   gateway:
+<<<<<<< Updated upstream
     build: ./gateway
+=======
+    build: .
+>>>>>>> Stashed changes
     ports:
       - "127.0.0.1:5005:5005"
     environment:
       AUTH_URL: https://player-service:5001
       ENCOUNTER_URL: https://encounter-service:5003
+      MONSTER_URL: https://monster:5002
     depends_on:
       player-service:
         condition: service_healthy
       encounter-service:
         condition: service_healthy
     healthcheck:
+<<<<<<< Updated upstream
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('https://localhost:5005/health', timeout=2)"]
+=======
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:5005/health', context=ctx, timeout=2)"]
+>>>>>>> Stashed changes
       interval: 5s
       timeout: 3s
       retries: 10

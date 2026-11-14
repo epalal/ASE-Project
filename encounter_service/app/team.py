@@ -27,7 +27,7 @@ def _monster_ids_from(body):
 
 def saved_team(player_id):
     """The owned monster IDs of the player's team, in slot order."""
-    rows = TeamMember.query.filter_by(player_id=player_id).order_by(TeamMember.slot).all()
+    rows = TeamMember.query.filter_by(player_id=str(player_id)).order_by(TeamMember.slot).all()
     return [row.owned_monster_id for row in rows]
 
 

@@ -3,7 +3,7 @@ services:
     build: ./player_service
     container_name: player-service
     environment:
-      DATABASE_URL: sqlite:////data/player_db.sqlite3
+      DATABASE_URL: sqlite:////player_db.sqlite3
     volumes:
       - player-service-certs:/certs:ro
       - player-db-data:/data

@@ -7,7 +7,7 @@ import threading
 import traceback
 import uuid
 import jwt
-import time
+import time, datetime
 from db.db import SessionLocal, User
 from bcrypt import hashpw, gensalt, checkpw
 
@@ -61,7 +61,7 @@ def account():
             return error("user_exists", "Username already exists", status=409)
 
         hashed_password = hashpw(password.encode('utf-8'), gensalt()).decode('utf-8')
-        new_user = User(username=username, password_hashed=hashed_password, created_at=time.time())
+        new_user = User(username=username, password_hashed=hashed_password, created_at=datetime.datetime.now())
         
         session.add(new_user)
         session.commit()

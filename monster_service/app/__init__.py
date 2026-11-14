@@ -27,3 +27,5 @@ def create_app(test_config=None):
         catalog()
 
     return app
+
+app = create_app()

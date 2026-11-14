@@ -1,6 +1,6 @@
 services:
   gateway:
-    build: ./gateway
+    build: ./
     container_name: api_gateway
     ports:
       - "127.0.0.1:5005:5005"
@@ -9,9 +9,9 @@ services:
       MONSTER_URL: https://monster-service:5002
       ENCOUNTER_URL: https://encounter-service:5003
     depends_on:
-      auth:
+      player-service:
         condition: service_healthy
-      game:
+      encounter-service:
         condition: service_healthy
       monster:
         condition: service_healthy

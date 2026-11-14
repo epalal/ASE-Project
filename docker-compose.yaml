@@ -1,7 +1,7 @@
 include:
   - tls_init/compose.yaml
-  - gateway/compose.yaml
   - player_service/compose.yaml
+  - gateway/compose.yaml
   - encounter_service/compose.yaml
   - frontend_service/compose.yaml
 

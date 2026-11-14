@@ -4,3 +4,38 @@ include:
   - player_service/compose.yaml
   - encounter_service/compose.yaml
   - frontend_service/compose.yaml
+
+services:  
+  monster:
+    build: ./monster_service
+    container_name: monster_service
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@monster_db:5432/monster_db
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-test-internal-secret-key}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
+    depends_on:
+      monster_db:
+        condition: service_healthy
+    expose:
+      - "5002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; ctx = ssl._create_unverified_context(); urllib.request.urlopen('https://localhost:5002/health', context=ctx, timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  monster_db:
+    image: postgres:15-alpine
+    container_name: monster_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=monster_db
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

@@ -5,8 +5,8 @@ services:
     ports:
       - "127.0.0.1:5005:5005"
     environment:
-      AUTH_URL: http://player-service:5001
-      MONSTER_URL: https://monster-service:5002
+      AUTH_URL: https://player-service:5001
+      MONSTER_URL: https://monster:5002
       ENCOUNTER_URL: https://encounter-service:5003
     depends_on:
       player-service:

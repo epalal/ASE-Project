@@ -115,7 +115,7 @@ cd frontend_service
 docker compose up
 ```
 
-When all the containers are running, visit http://localhost:8000/ to access the frontend.
+When all the containers are running, visit http://localhost:8080/ to access the frontend.
 
 ## Testing instructions
 

@@ -192,6 +192,34 @@ bru run encounter encounter-stub encounter-security \
 
 An exit code of zero means that all selected API tests passed.
 
+### Bruno tests of the Player Service
+
+```
+docker compose -f compose.player.yaml up --build -d --wait
+docker compose -f compose.player.yaml cp player-service:/certs/ca.pem tests_player/bruno/ca.pem
+```
+
+The services use HTTPS with certificates from our own development authority, so
+Bruno has to trust it: in Bruno, open Preferences > General, turn on "Use custom
+CA Certificate" and choose `tests_player/bruno/ca.pem`. `ca.pem` is the authority's
+public certificate, not a secret. It is not committed because a new one is made
+after every `down -v`, so copy it again then.
+
+Then open `tests_player/bruno` as a collection and run it with the Runner, or from
+the terminal (with Node: `npm install -g @usebruno/cli@4.3.0`):
+
+```
+cd tests_player/bruno
+bru run health account login --cacert ca.pem
+```
+
+Exit code 0 means every test passed. To stop:
+
+```
+docker compose -f compose.player.yaml down -v
+```
+
+
 ## Additional information
 
 - The API Gateway is the only intended public entry point.
@@ -216,7 +244,7 @@ An exit code of zero means that all selected API tests passed.
 | Folder | What it is | Owner |
 |---|---|---|
 | `gateway/` | API gateway, the only entry point from outside | Elisa |
-| `auth_service/` | Player Service: accounts, login, login tokens | Elisa |
+| `player_service/` | Player Service: accounts, login, login tokens | Elisa |
 | `monster_service/` | Monster Service: catalogue, players' monsters, rewards | Elena |
 | `encounter_service/` | Encounter Service: team, challenges, encounters | Hatem |
 | `frontend_service/` | Web frontend | Tancredi |
@@ -228,6 +256,7 @@ Shared parts:
 | `tls_init/` | Makes the HTTPS certificates of every service and the key pair for login tokens. It runs at every `docker compose up` and keeps what already exists. |
 | `monster_stub/`, `player_stub/` | Stand-ins for the Monster and Player services in component tests |
 | `tests/bruno/` | The Bruno API tests, with a folder per service and per stub |
+| `tests_player/bruno/` | The Bruno API tests on player service, with a folder per service|
 
 ## Get started
 

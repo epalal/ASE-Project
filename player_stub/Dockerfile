@@ -1,19 +1,19 @@
 FROM python:3.12-slim
 
-# Lab 9: the security fixes Debian published after the base image was built
-# (trivy reports them as fixable). Runs as root, before the normal user.
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /player_stub
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY player_stub.py .
 
-RUN useradd --uid 10004 --no-create-home stub
+COPY . .
+
+RUN useradd -m -r stub && \
+    chown -R stub:stub /player_stub
+
 USER stub
 
 EXPOSE 5001
-# Same port and HTTPS as the real Player Service; it reads the token key from /certs.
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "4", \
-     "--certfile", "/certs/server.pem", "--keyfile", "/certs/server.key", \
-     "player_stub:create_stub()"]
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5010", "--certfile", "/certs/server.pem", "--keyfile", "/certs/server.key", "app:app"]

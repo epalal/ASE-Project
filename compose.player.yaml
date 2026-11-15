@@ -1,0 +1,55 @@
+name: player-stub
+
+include:
+  - tls_init/compose.yaml
+
+services:
+  player-db-init:
+    build: ./player_service
+    user: root
+    command: ["sh", "-c", "chown -R appuser:appuser /data"]
+    volumes:
+      - player-db-data:/data
+
+  player-service:
+    build: ./player_service
+    container_name: player-service
+    environment:
+      DATABASE_URL: sqlite:////data/player_db.sqlite3
+    volumes:
+      - player-service-certs:/certs:ro
+      - player-db-data:/data
+    ports:
+      - "127.0.0.1:5001:5001"
+    group_add:
+      - "10000"
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+      player-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  stub:
+    build: ./player_stub
+    command: ["python", "player_stub.py"]
+    group_add:
+      - "10000"
+    ports:
+      - "127.0.0.1:5010:5010"
+    volumes:
+      - player-service-certs:/certs:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5010/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  player-db-data:

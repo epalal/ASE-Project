@@ -192,24 +192,33 @@ bru run encounter encounter-stub encounter-security \
 
 An exit code of zero means that all selected API tests passed.
 
-### Bruno API tests for player service
-```bash
+### Bruno tests of the Player Service
+
+```
+docker compose -f compose.player.yaml up --build -d --wait
 docker compose -f compose.player.yaml cp player-service:/certs/ca.pem tests_player/bruno/ca.pem
 ```
-The command above is needed because to make the test work a ca.pem file is required. Since it is 
-considered a secret, it is not shared with the public and needs to be taken from the specific 
-folder in the volume. 
 
 The services use HTTPS with certificates from our own development authority, so
 Bruno has to trust it: in Bruno, open Preferences > General, turn on "Use custom
-CA Certificate" and choose `tests_player/bruno/ca.pem`. The file is not committed, and a
-new one is made after every `down -v`, so copy it again then.
+CA Certificate" and choose `tests_player/bruno/ca.pem`. `ca.pem` is the authority's
+public certificate, not a secret. It is not committed because a new one is made
+after every `down -v`, so copy it again then.
 
-To access the Bruno tests from the terminal, the procedure is the following:
+Then open `tests_player/bruno` as a collection and run it with the Runner, or from
+the terminal (with Node: `npm install -g @usebruno/cli@4.3.0`):
+
 ```
 cd tests_player/bruno
-bru run account calls health login reset --cacert ca.pem
+bru run health account login calls reset --cacert ca.pem
 ```
+
+Exit code 0 means every test passed. To stop:
+
+```
+docker compose -f compose.player.yaml down -v
+```
+
 
 ## Additional information
 

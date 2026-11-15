@@ -1,10 +1,7 @@
 # Monster Tamers
 
 ## Group
-Elisa Angelinelli
-Tancredi Cappello
-Hatem Magdy Mohamed Ahmed Elashmawy
-Elena Palandri
+Elisa Angelinelli, Tancredi Cappello, Hatem Magdy Mohamed Ahmed Elashmawy, Elena Palandri
 
 
 ## Architecture diagram

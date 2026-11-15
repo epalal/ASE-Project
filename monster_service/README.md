@@ -1,5 +1,136 @@
 # Monster Service
 
+## Architecture diagram
+
+```mermaid
+flowchart LR
+    Client[Frontend or API client]
+    Player[Player/Auth Service]
+    Encounter[Encounter Service]
+    Monster[Monster Service<br/>Flask API :5002]
+    Database[(PostgreSQL<br/>monster_db)]
+    Catalog[(Monster catalogue)]
+
+    Client -->|JWT-protected collection requests| Monster
+    Player -->|RS256 public key| Monster
+    Encounter -->|X-Internal-Secret<br/>collection and rewards| Monster
+    Monster --> Database
+    Monster --> Catalog
+```
+
+The Monster Service owns the monster catalogue and each player's collection.
+The Player/Auth Service issues JWTs, while the Encounter Service uses the
+internal service secret to read collections and apply encounter rewards.
+
+For more see docs/architecture.md and architecture
+
+## OpenAPI specifications
+
+The complete API contract is available in
+[`openapi.yaml`](./openapi.yaml). It is an OpenAPI 3.0 specification covering:
+
+- the public catalogue and monster image endpoints;
+- the JWT-protected player collection endpoint;
+- the internal collection endpoint used by the Encounter Service;
+- the internal stats and capture reward endpoint;
+- the service health check.
+
+The specification can be imported into Swagger UI, Postman, Bruno, or another
+OpenAPI-compatible tool.
+
+## Implementation status
+
+Implemented:
+
+- 16-monster catalogue with idempotent startup seeding;
+- player collection creation with three starter monsters;
+- collection and catalogue HTTP endpoints;
+- monster artwork serving;
+- RS256 JWT validation for player requests;
+- shared-secret validation for internal service requests;
+- capture rewards and capped stat rewards;
+- idempotent reward application through the `AppliedReward` table;
+- PostgreSQL deployment through Docker Compose;
+- automated pytest coverage and Bruno request collections.
+
+The service does not issue JWTs and does not own player authentication.
+
+## Running instructions
+
+### Docker Compose
+
+From the `monster_service` directory, ensure the required files exist under
+`certs/` (`ca.pem`, `server.pem`, `server.key`, `db_password.txt`, and
+`data_key.txt`), then run:
+
+```bash
+docker compose -f docker-compose.yaml up --build
+```
+
+The API is available at `https://localhost:5002`. Because the local
+certificate is self-signed, use `-k` with curl:
+
+```bash
+curl -k https://localhost:5002/health
+curl -k https://localhost:5002/monsters
+```
+
+Set `INTERNAL_SERVICE_SECRET` in the environment to override the local
+development default. The collection endpoint requires a valid JWT issued by
+the Player/Auth Service; internal endpoints require the
+`X-Internal-Secret` header.
+
+### Local Python process
+
+```bash
+python -m venv .venv
+# Linux/macOS:
+source .venv/bin/activate
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+flask --app "app:create_app()" run --port 5002
+```
+
+Set `JWT_PUBLIC_KEY` (or `JWT_PUBLIC_KEY_PATH`) and
+`INTERNAL_SERVICE_SECRET` before starting the application. A reachable
+PostgreSQL database is also required.
+
+## Testing instructions
+
+The automated tests use an in-memory SQLite database and generate a temporary
+RS256 key pair, so PostgreSQL and Docker are not required:
+
+```bash
+pytest
+```
+
+To run only the Monster Service tests from the repository root:
+
+```bash
+pytest monster_service/tests -q
+```
+
+The `tests/bruno` collection provides additional request-level checks for
+catalogue, collection, and reward workflows. Configure the local Bruno
+environment with the service URL and the internal secret before running those
+requests.
+
+## Additional information
+
+- Public catalogue routes do not require authentication.
+- `/collection` requires `Authorization: Bearer <JWT>`.
+- Internal routes require `X-Internal-Secret` and must not be called by the
+  frontend.
+- Reward requests are keyed by `encounter_id`; retrying an already applied
+  reward is safe and does not apply it twice.
+- Player-owned monsters cannot contain the same catalogue species more than
+  once.
+- For production, provide database credentials, JWT keys, certificates, and
+  internal secrets through deployment secrets rather than source-controlled
+  files.
+
 The `monster_service` directory contains the Monster Service microservice of the
 ASE project. It is a Flask application that owns the global monster catalogue,
 creates and stores each player's collection, serves monster artwork, and

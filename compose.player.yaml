@@ -1,4 +1,6 @@
-name: player-stub
+# Component tests of the Player Service: the real service with its database,
+# published only on this computer for Bruno (tests_player/bruno).
+name: player-component
 
 include:
   - tls_init/compose.yaml
@@ -30,22 +32,6 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 5s
-
-  stub:
-    build: ./player_stub
-    command: ["python", "player_stub.py"]
-    group_add:
-      - "10000"
-    ports:
-      - "127.0.0.1:5010:5010"
-    volumes:
-      - player-service-certs:/certs:ro
-    healthcheck:
-      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5010/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10

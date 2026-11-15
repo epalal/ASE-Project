@@ -5,8 +5,17 @@ info:
 
 http:
   method: GET
-  url: https://localhost:5010/health
+  url: https://localhost:5001/health
   auth: inherit
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.status
+      operator: eq
+      value: "healthy"
 
 settings:
   encodeUrl: true

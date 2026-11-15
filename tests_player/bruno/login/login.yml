@@ -5,15 +5,23 @@ info:
 
 http:
   method: POST
-  url: https://localhost:5010/login
+  url: https://localhost:5001/login
   body:
     type: json
     data: |-
       {
-        "username": "test_Bruno",
+        "username": "{{username}}",
         "password": "securepassword"
       }
   auth: inherit
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.token
+      operator: isString
 
 settings:
   encodeUrl: true

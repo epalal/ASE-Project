@@ -210,7 +210,7 @@ the terminal (with Node: `npm install -g @usebruno/cli@4.3.0`):
 
 ```
 cd tests_player/bruno
-bru run health account login calls reset --cacert ca.pem
+bru run health account login --cacert ca.pem
 ```
 
 Exit code 0 means every test passed. To stop:

@@ -5,15 +5,26 @@ info:
 
 http:
   method: POST
-  url: https://localhost:5010/account
+  url: https://localhost:5001/account
   body:
     type: json
     data: |-
       {
-        "username": "test_Bruno",
+        "username": "{{username}}",
         "password": "securepassword"
       }
   auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // A new name on every run, so a second run doesn't get "user already exists".
+        bru.setVar("username", "test_Bruno_" + Date.now());
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "201"
 
 settings:
   encodeUrl: true

@@ -1,9 +1,13 @@
-services:  
+services:
+  player-db-init:
+    build: .
+    user: root
+    command: ["sh", "-c", "chown -R appuser:appuser /data"]
+    volumes:
+      - player-db-data:/data
+
   player-service:
     build: .
-    container_name: player-service
-    ports: 
-     - "127.0.0.1:5001:5001"
     environment:
       DATABASE_URL: sqlite:////data/player_db.sqlite3
     volumes:
@@ -13,6 +17,8 @@ services:
       - "10000"
     depends_on:
       tls-init:
+        condition: service_completed_successfully
+      player-db-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import ssl, urllib.request; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:5001/health', context=ctx, timeout=2)"]

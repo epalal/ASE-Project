@@ -1,19 +1,31 @@
 services:
   gateway:
     build: .
+    container_name: api_gateway
+    group_add: ["10000"]
     ports:
       - "127.0.0.1:5005:5005"
     environment:
       AUTH_URL: https://player-service:5001
+      MONSTER_URL: https://monster-service:5002
       ENCOUNTER_URL: https://encounter-service:5003
+      CA_CERT_PATH: /certs/ca.pem
+      FRONTEND_ORIGIN: https://localhost:8080
+    volumes:
+      - gateway-certs:/certs:ro
     depends_on:
       player-service:
+        condition: service_healthy
+      monster-service:
         condition: service_healthy
       encounter-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import ssl, urllib.request; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:5005/health', context=ctx, timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5005/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 5s
+
+volumes:
+  gateway-certs:

@@ -219,7 +219,7 @@ We keep the formula agreed in issue #10 and shown on slide 3. Only the monster p
 2. Each team monster's power is adjusted against the wild monster: +1 if its type beats the wild monster's type, -1 if the wild monster's type beats it, 0 otherwise. The adjusted power never goes below 0.
 3. Team power = the sum of the three adjusted powers.
 4. Challenge power = 3 × the wild monster's power, which puts one monster on the same scale as a team of three.
-5. `P(win) = 1 / (1 + exp(-0.6 × (team_power - challenge_power)))`. Equal power gives 50%, a 5-point advantage about 95% and a 5-point disadvantage about 5%.
+5. `P() = 1 / (1 + exp(-0.6 × (team_power - challenge_power)))`. Equal power gives 50%, a 5-point advantage about 95% and a 5-point disadvantage about 5%.
 6. `P(capture) = 0.75 × P(win)`.
 
 Type cycle: Fire beats Dark, Dark beats Grass, Grass beats Water, Water beats Fire. All other matchups are neutral.

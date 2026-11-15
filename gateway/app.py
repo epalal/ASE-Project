@@ -5,7 +5,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:8080"], supports_credentials=True)
+CORS(app, origins=["http://localhost:8080"], supports_credentials=True, expose_headers=["Content-Type"])
 
 AUTH_URL = os.environ.get("AUTH_URL", "https://localhost:5001").rstrip("/")
 MONSTER_URL = os.environ.get("MONSTER_URL", "https://localhost:5002").rstrip("/")
@@ -213,4 +213,4 @@ def health():
     return jsonify(status="ok"), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, ssl_context=("/certs/server.pem", "/certs/server.key"))
+    app.run(host='0.0.0.0', port=5005) # , ssl_context=("/certs/server.pem", "/certs/server.key"))

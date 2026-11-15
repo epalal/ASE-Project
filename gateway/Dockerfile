@@ -19,4 +19,5 @@ USER appuser
 
 EXPOSE 5005
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--certfile", "/certs/server.pem", "--keyfile", "/certs/server.key", "app:app"]
+# CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--certfile", "/certs/server.pem", "--keyfile", "/certs/server.key", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5005", "app:app"]

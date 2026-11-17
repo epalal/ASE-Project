@@ -1,6 +1,6 @@
 include:
   - tls_init/compose.yaml
   - player_service/compose.yaml
+  - monster_service/compose.yaml
   - gateway/compose.yaml
   - encounter_service/compose.yaml
-  - monster_service/compose.yaml

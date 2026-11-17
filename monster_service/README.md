@@ -60,8 +60,8 @@ The service does not issue JWTs and does not own player authentication.
 ### Docker Compose
 
 From the `monster_service` directory, ensure the required files exist under
-`certs/` (`ca.pem`, `server.pem`, `server.key`, `db_password.txt`, and
-`data_key.txt`), then run:
+`certs/` (`ca.pem`, `server.pem`, `server.key`, `db_password.txt`,
+`data_key.txt`, `jwt_private.pem`, and `jwt_public.pem`), then run:
 
 ```bash
 docker compose -f docker-compose.yaml up --build

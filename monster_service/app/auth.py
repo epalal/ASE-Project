@@ -1,49 +1,62 @@
 import os
 from functools import wraps
-from flask import request, jsonify, g
+import hmac
 import jwt
+from flask import request, jsonify, g
 
-JWT_ALGORITHM = "RS256"
+def _load_public_key():
+    # Supporta sia il percorso del compose principale (/certs/jwt_public.pem)
+    # sia il secret standalone (/run/secrets/jwt_public) o variabile d'ambiente
+    for path in (
+        os.environ.get("JWT_PUBLIC_KEY_PATH", ""),
+        "/certs/jwt_public.pem",
+        "/run/secrets/jwt_public",
+    ):
+        if path and os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+    return os.environ.get("JWT_PUBLIC_KEY")
 
-def get_public_key():
-    pub_key = os.environ.get("JWT_PUBLIC_KEY")
-    if pub_key:
-        return pub_key.replace("\\n", "\n")
-    key_path = os.environ.get("JWT_PUBLIC_KEY_PATH", "/certs/jwt_public.pem")
-    if os.path.exists(key_path):
-        with open(key_path, "r") as f:
-            return f.read()
-    raise RuntimeError(f"Public key {JWT_ALGORITHM} not found.")
+def _unauthorized(message="Invalid or missing token"):
+    resp = jsonify({"error": "unauthorized", "message": message})
+    resp.status_code = 401
+    resp.headers["WWW-Authenticate"] = "Bearer"
+    return resp
 
-def require_jwt(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
+def require_jwt(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Missing or invalid Bearer token"}), 401
-        
-        token = auth_header.split(" ", 1)[1].strip()
+        scheme, _, token = auth_header.partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            return _unauthorized("Missing bearer token")
+
+        public_key = _load_public_key()
+        if not public_key:
+            return jsonify({"error": "server_error", "message": "JWT public key not configured"}), 500
+
         try:
-            public_key = get_public_key()
-            payload = jwt.decode(
-                token, 
-                public_key, 
-                algorithms=["RS256"], 
-                audience="monster-tamers",
-                issuer="player-service", 
-                options={"require": ["exp", "sub", "aud", "iss"]}
+            claims = jwt.decode(
+                token.strip(),
+                public_key,
+                algorithms=["RS256"],
+                issuer="player-service",
+                options={"require": ["exp", "iss", "sub"]},
             )
-            player_id = payload.get("sub") or payload.get("player_id")
-            if not player_id:
-                return jsonify({"error": "Payload of the token is missing player identifier"}), 401
-            g.player_id = str(player_id)
         except jwt.ExpiredSignatureError:
-            return jsonify({"error": "Token expired"}), 401
+            return _unauthorized("Token expired")
         except jwt.InvalidTokenError:
-            return jsonify({"error": "Token is invalid"}), 401
-        
-        return f(*args, **kwargs)
-    return decorated
+            return _unauthorized("Invalid token")
+
+        player_id = str(claims.get("sub", "")).strip()
+        if not player_id:
+            return _unauthorized("Invalid subject in token")
+
+        g.player_id = player_id
+        g.username = claims.get("username")
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 def require_internal_secret(f):
     """Protects internal routes (es. /internal/rewards) from unauthorized access."""

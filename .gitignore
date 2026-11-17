@@ -20,3 +20,6 @@ data/
 
 # Database
 *.sqlite3
+
+# Generated Bruno local environment
+monster_service/tests/bruno/environments/local-component.bru

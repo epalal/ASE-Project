@@ -1,0 +1,6 @@
+vars {
+  monsterUrl: https://localhost:5002
+  internalSecret: placeholder
+  testToken: placeholder
+  expiredToken: placeholder
+}

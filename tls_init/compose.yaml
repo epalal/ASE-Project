@@ -1,10 +1,4 @@
-# tls-init for any stack that includes this file. It makes the HTTPS certificates
-# of every service and the key pair for login tokens, then exits; at the next start
-# it keeps what already exists. Each service mounts only its own volume at /certs
-# (read only) and joins the certificate group with group_add: ["10000"].
-#
-#   include:
-#     - tls_init/compose.yaml
+# tls-init generates service certificates and persistent encryption keys.
 services:
   tls-init:
     build: .
@@ -19,7 +13,7 @@ services:
       - encounter-db-certs:/tls/encounter-db
 
 volumes:
-  tls-ca:  # the certificate authority and the token keys: only tls-init mounts it
+  tls-ca:
   gateway-certs:
   player-service-certs:
   monster-service-certs:

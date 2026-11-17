@@ -1,0 +1,50 @@
+# Monster Service and its PostgreSQL database for the root stack.
+x-certificate-group: &certificate-group
+  group_add: ["10000"]
+
+services:
+  monster-db:
+    build: ./db
+    <<: *certificate-group
+    environment:
+      POSTGRES_USER: monster_admin
+      POSTGRES_PASSWORD: ${MONSTER_DB_ADMIN_PASSWORD:?set it in .env}
+      POSTGRES_DB: monster_db
+      MONSTER_DB_PASSWORD: ${MONSTER_DB_PASSWORD:?set it in .env}
+    volumes:
+      - monster-db-certs:/certs:ro
+      - monster-db-data:/var/lib/postgresql/data
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U monster_admin -d monster_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  monster-service:
+    build: .
+    <<: *certificate-group
+    environment:
+      DATABASE_URL: "postgresql://monster_app:${MONSTER_DB_PASSWORD}@monster-db:5432/monster_db?sslmode=verify-full&sslrootcert=/certs/ca.pem"
+      DATA_KEY_PATH: /certs/data.key
+      JWT_PUBLIC_KEY_PATH: /certs/jwt_public.pem
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it in .env}
+    volumes:
+      - monster-service-certs:/certs:ro
+    depends_on:
+      monster-db:
+        condition: service_healthy
+      tls-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5002/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  monster-db-data:
+  monster-db-certs:
+  monster-service-certs:

@@ -40,19 +40,10 @@ jobs:
           if [ ! -f bruno.json ]; then
             echo '{"version": "1", "name": "monster_service_tests", "type": "collection"}' > bruno.json
           fi
-          pip install PyJWT[crypto]
-          TEST_TOKEN=$(python -c "import jwt, time; key=open('/tmp/jwt_private.pem').read(); print(jwt.encode({'iss':'player-service','sub':'test_player_01','username':'test','exp':int(time.time())+3600}, key, algorithm='RS256'))")
-          EXPIRED_TOKEN=$(python -c "import jwt, time; key=open('/tmp/jwt_private.pem').read(); print(jwt.encode({'iss':'player-service','sub':'test_player_01','username':'test','exp':int(time.time())-3600}, key, algorithm='RS256'))")
-          cat <<EOF > /tmp/ci-env.json
-          {
-            "monsterUrl": "https://localhost:5002",
-            "internalSecret": "test-internal-secret-key",
-            "testToken": "$TEST_TOKEN",
-            "expiredToken": "$EXPIRED_TOKEN"
-          }
-          EOF
+          mkdir -p environments
+          python3 -c "import jwt, time; key=open('/tmp/jwt_private.pem').read(); now=int(time.time()); valid=jwt.encode({'iss':'player-service','sub':'test_player_01','username':'test','exp':now+3600},key,algorithm='RS256'); exp=jwt.encode({'iss':'player-service','sub':'test_player_01','username':'test','exp':now-3600},key,algorithm='RS256'); open('environments/local-component.bru','w').write(f'vars {{\n  monsterUrl: https://localhost:5002\n  internalSecret: test-internal-secret-key\n  testToken: {valid}\n  expiredToken: {exp}\n}}\n')"
           bru run --env local-component --insecure
-      
+          
       - name: Show logs if failure
         if: failure()
         run: docker compose -f monster_service/docker-compose.yaml logs

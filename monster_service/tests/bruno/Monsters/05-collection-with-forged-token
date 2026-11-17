@@ -1,0 +1,19 @@
+meta {
+  name: Collection With Forged Token (alg none)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{monsterUrl}}/collection
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF5ZXItc2VydmljZSIsInN1YiI6InRlc3RfcGxheWVyXzAxIiwiZXhwIjo5OTk5OTk5OTk5fQ.
+}
+
+assert {
+  res.status: eq 401
+}

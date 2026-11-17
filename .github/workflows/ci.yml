@@ -167,5 +167,6 @@ jobs:
           scan-type: fs
           scan-ref: .
           scanners: secret
+          secret-config: trivy-secret.yaml
           exit-code: "1"
           version: v0.76.1

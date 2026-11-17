@@ -1,4 +1,26 @@
-"""Generate service TLS certificates, JWT keys, and persistent data keys."""
+"""Makes the HTTPS certificates of every service (design rule 7).
+
+It runs as a one-shot container (tls-init) before the other services start in
+Docker Compose, so `docker compose up` alone still builds and starts everything.
+Each folder below OUT is one Docker volume, mounted only by the service it belongs to:
+
+  ca/                  our certificate authority and the login-token key pair
+                       (only tls-init mounts this one)
+  <service>/ca.pem     the authority's certificate, to trust the other services
+  <service>/server.pem, server.key
+                       this service's certificate, valid for its Docker name and localhost
+  <service>/jwt_public.pem
+                       the key that checks login tokens (design rule 6)
+  player-service/jwt_private.pem
+                       the key that signs login tokens: only the Player Service gets it
+  encounter-service/data.key
+                       the Fernet key that encrypts the stored encounters (Lab 8):
+                       only the Encounter Service gets it, never its database
+
+Every service runs as its own non-root user. A service's private keys can be read
+by their owner (tls-init) and by the certificate group, which each service joins in
+Docker Compose. The keys in ca/ can be read by tls-init alone.
+"""
 
 import datetime as dt
 import ipaddress
@@ -15,16 +37,16 @@ SERVICES = [
     "gateway",
     "player-service",
     "monster-service",
-    "monster-db",
     "encounter-service",
     "player-db",
+    "monster-db",
     "encounter-db",
 ]
-TOKEN_SIGNER = "player-service"
-ENCRYPTS_ITS_RECORDS = {"encounter-service", "monster-service"}
+TOKEN_SIGNER = "player-service"  # the only service that may create login tokens
+ENCRYPTS_ITS_RECORDS = {"encounter-service"}  # Lab 8: each gets its own data key
 VALID_DAYS = 365
-SERVICE_KEY_MODE = 0o640
-AUTHORITY_KEY_MODE = 0o600
+SERVICE_KEY_MODE = 0o640  # owner and the certificate group
+AUTHORITY_KEY_MODE = 0o600  # tls-init alone
 
 
 def _new_key():
@@ -32,29 +54,30 @@ def _new_key():
 
 
 def _write_secret(path, data, mode):
+    # The file is created with these permissions, so no other user can read it even for a moment.
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     with os.fdopen(descriptor, "wb") as secret:
         secret.write(data)
-    os.chmod(path, mode)
+    os.chmod(path, mode)  # also when the file was already there
 
 
 def _write_key(path, key, mode):
     _write_secret(
         path,
         key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
         ),
         mode,
     )
 
 
+def _write_certificate(path, certificate):
+    path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+
+
 def _validity(builder):
     now = dt.datetime.now(dt.timezone.utc)
-    return builder.not_valid_before(now - dt.timedelta(days=1)).not_valid_after(
-        now + dt.timedelta(days=VALID_DAYS)
-    )
+    return builder.not_valid_before(now - dt.timedelta(days=1)).not_valid_after(now + dt.timedelta(days=VALID_DAYS))
 
 
 def _make_authority(folder):
@@ -85,7 +108,7 @@ def _make_authority(folder):
         .sign(key, hashes.SHA256())
     )
     _write_key(folder / "ca.key", key, AUTHORITY_KEY_MODE)
-    (folder / "ca.pem").write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+    _write_certificate(folder / "ca.pem", certificate)
     return key, certificate
 
 
@@ -142,6 +165,8 @@ def _all_exist(*paths):
 
 
 def make_certs(out, services=SERVICES):
+    """Runs at every `docker compose up`: what already exists is kept, so the
+    certificates and login tokens issued before a restart stay valid."""
     out = Path(out)
     authority_folder = out / "ca"
     authority_folder.mkdir(parents=True, exist_ok=True)
@@ -155,11 +180,11 @@ def make_certs(out, services=SERVICES):
     for service in services:
         folder = out / service
         folder.mkdir(exist_ok=True)
-        (folder / "ca.pem").write_bytes(authority_certificate.public_bytes(serialization.Encoding.PEM))
+        _write_certificate(folder / "ca.pem", authority_certificate)
         if not _all_exist(folder / "server.key", folder / "server.pem"):
             key, certificate = _make_service_certificate(service, authority_key, authority_certificate)
             _write_key(folder / "server.key", key, SERVICE_KEY_MODE)
-            (folder / "server.pem").write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+            _write_certificate(folder / "server.pem", certificate)
         (folder / "jwt_public.pem").write_bytes((authority_folder / "jwt_public.pem").read_bytes())
         if service == TOKEN_SIGNER:
             _write_secret(
@@ -167,6 +192,7 @@ def make_certs(out, services=SERVICES):
                 (authority_folder / "jwt_private.pem").read_bytes(),
                 SERVICE_KEY_MODE,
             )
+        # Made once and never replaced: a new key could not read what the old one encrypted.
         if service in ENCRYPTS_ITS_RECORDS and not (folder / "data.key").exists():
             _write_secret(folder / "data.key", Fernet.generate_key(), SERVICE_KEY_MODE)
 

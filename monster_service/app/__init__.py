@@ -1,9 +1,10 @@
 import os
 from urllib.parse import urlparse, urlunparse
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, g, request
 from sqlalchemy.exc import IntegrityError, OperationalError 
 from .models import db
 from .routes.monsters import monsters_bp
+from app.audit import audit
 
 def read_secret(secret_name, default=None):
     """Reads a secret from the Docker secrets directory. If the secret is not found, returns the default value."""
@@ -60,5 +61,28 @@ def create_app(test_config=None):
             db.session.rollback()
         from .initial_monsters import init_catalog
         init_catalog()
+
+    @app.after_request
+    def audit_request(response):
+        if request.path == "/health":
+            return response
+        status = response.status_code
+        outcome = (
+            "success"
+            if status < 400
+            else "denied"
+            if status in (401, 403)
+            else "failure"
+        )
+        user = getattr(g, "player_id", None) or getattr(g, "username", None) or "-"
+        audit(
+            "request",
+            outcome,
+            user=user,
+            method=request.method,
+            path=request.path,
+            status=status,
+        )
+        return response
 
     return app

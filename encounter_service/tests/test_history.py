@@ -45,10 +45,15 @@ def test_a_player_never_sees_another_players_encounters(game):
     assert _listed(game, "player-1") == [mine]
 
 
-def test_the_history_keeps_only_the_50_newest_encounters(game):
+def test_the_history_keeps_only_the_50_newest_encounters(game, clock):
+    def play_one():
+        # Like a real player, slower than the limit of 10 encounters a minute (test_rate_limit.py).
+        clock.advance(seconds=7)
+        return _finished_encounter(game, "player-1", SPROUTPAW)
+
     game.give_team("player-1", TEAM)
-    oldest = _finished_encounter(game, "player-1", SPROUTPAW)
-    newer = [_finished_encounter(game, "player-1", SPROUTPAW) for _ in range(50)]
+    oldest = play_one()
+    newer = [play_one() for _ in range(50)]
 
     listed = _listed(game, "player-1")
 

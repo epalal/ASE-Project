@@ -159,6 +159,24 @@ def dice():
     return Dice()
 
 
+class Clock:
+    """Stands in for the service's clock: the real time, plus whatever the test adds."""
+
+    def __init__(self):
+        self._offset = dt.timedelta(0)
+
+    def now(self):
+        return dt.datetime.now(dt.timezone.utc) + self._offset
+
+    def advance(self, seconds):
+        self._offset += dt.timedelta(seconds=seconds)
+
+
+@pytest.fixture
+def clock():
+    return Clock()
+
+
 class Game:
     """Small helpers so the tests read like the game."""
 
@@ -262,7 +280,7 @@ def database_uri():
 
 
 @pytest.fixture
-def app(player_service_keys, monster_service, dice, database_uri):
+def app(player_service_keys, monster_service, dice, clock, database_uri):
     _, public_pem = player_service_keys
     return create_app(
         {
@@ -273,6 +291,7 @@ def app(player_service_keys, monster_service, dice, database_uri):
         },
         monster_client=monster_service,
         draw=dice.roll,
+        clock=clock.now,
     )
 
 

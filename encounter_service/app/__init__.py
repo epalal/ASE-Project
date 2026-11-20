@@ -1,5 +1,6 @@
 import os
 import secrets
+from datetime import datetime, timezone
 
 from cryptography.fernet import Fernet
 from flask import Flask, jsonify
@@ -52,7 +53,7 @@ def _settings_from_environment():
 MAX_BODY_BYTES = 10_000
 
 
-def create_app(test_config=None, monster_client=None, draw=None):
+def create_app(test_config=None, monster_client=None, draw=None, clock=None):
     """Without `test_config`, the settings come from the environment.
 
     `draw` returns a random number in [0, 1). Production uses the operating
@@ -78,6 +79,8 @@ def create_app(test_config=None, monster_client=None, draw=None):
         )
     app.extensions["monster_client"] = monster_client
     app.extensions["draw"] = draw or secrets.SystemRandom().random
+    # `clock` returns the current UTC time; tests pass one they can move forward.
+    app.extensions["clock"] = clock or (lambda: datetime.now(timezone.utc))
     # Lab 8: the key that encrypts the stored encounter snapshots (models.EncryptedJSON).
     app.extensions["fernet"] = Fernet(app.config["DATA_KEY"])
     register_error_handlers(app)

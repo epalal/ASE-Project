@@ -462,6 +462,12 @@ components:
                     const: request_entity_too_large
     Unauthorized:
       description: '`unauthorized`: no token, or a token that is forged, expired, for another audience or issuer, or missing a claim'
+      headers:
+        WWW-Authenticate:
+          description: 'RFC 6750: `Bearer` when no token was sent, `Bearer error="invalid_token"` when the token was refused.'
+          schema:
+            type: string
+            enum: ['Bearer', 'Bearer error="invalid_token"']
       content:
         application/json:
           schema:

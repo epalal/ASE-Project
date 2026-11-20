@@ -10,6 +10,22 @@ def test_reading_the_team_needs_a_login_token(client):
     assert response.get_json()["error"] == "unauthorized"
 
 
+def test_a_request_without_a_token_is_told_to_send_a_bearer_token(client):
+    # RFC 6750, section 3: a 401 says which kind of credential the API expects.
+    response = client.get("/team")
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+
+
+def test_a_refused_token_is_answered_as_an_invalid_bearer_token(client, token_for, attacker_key):
+    # RFC 6750, section 3.1: a token was sent but it is not valid.
+    response = client.get("/team", headers=token_for("player-1", signing_key=attacker_key))
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
+
+
 def test_a_token_not_signed_by_the_player_service_is_refused(client, token_for, attacker_key):
     response = client.get("/team", headers=token_for("player-1", signing_key=attacker_key))
 

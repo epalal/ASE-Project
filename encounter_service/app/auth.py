@@ -14,7 +14,10 @@ def require_player(view):
     def guarded(*args, **kwargs):
         header = request.headers.get("Authorization", "")
         if not header.startswith("Bearer "):
-            return error("unauthorized", "A valid login token is required.", 401)
+            # RFC 6750, section 3: say that this API expects a Bearer token.
+            response, status = error("unauthorized", "A valid login token is required.", 401)
+            response.headers["WWW-Authenticate"] = "Bearer"
+            return response, status
         try:
             claims = jwt.decode(
                 header.removeprefix("Bearer "),
@@ -25,7 +28,10 @@ def require_player(view):
                 options={"require": ["exp", "sub", "aud", "iss"]},
             )
         except jwt.InvalidTokenError:  # forged, expired, malformed, wrong audience/issuer, or missing a claim
-            return error("unauthorized", "A valid login token is required.", 401)
+            # RFC 6750, section 3.1: a token was sent, but it is not valid.
+            response, status = error("unauthorized", "A valid login token is required.", 401)
+            response.headers["WWW-Authenticate"] = 'Bearer error="invalid_token"'
+            return response, status
         g.player_id = claims["sub"]
         return view(*args, **kwargs)
 

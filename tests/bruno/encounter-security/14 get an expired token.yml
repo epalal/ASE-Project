@@ -1,0 +1,25 @@
+info:
+  name: get an expired token
+  type: http
+  seq: 14
+
+http:
+  method: POST
+  url: "{{playerStubUrl}}/__tokens"
+  body:
+    type: json
+    data: |-
+      {"player_ids": ["tamer-a"], "expired": true}
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("expiredToken", res.body.tokens["tamer-a"]);
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true

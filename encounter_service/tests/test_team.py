@@ -1,6 +1,22 @@
 """Team endpoints (US-14, US-15, US-16), tested through the HTTP API."""
 
+import base64
+import hashlib
+import hmac
+import json
+import time
+
 import pytest
+
+
+def _forged_token(header, signature=b""):
+    """A token with the right claims for player-1, built by hand like an attacker would."""
+    def part(data):
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+    claims = {"sub": "player-1", "exp": int(time.time()) + 900, "aud": "monster-tamers", "iss": "player-service"}
+    unsigned = f"{part(json.dumps(header).encode())}.{part(json.dumps(claims).encode())}"
+    return f"{unsigned}.{part(signature)}", unsigned
 
 
 def test_reading_the_team_needs_a_login_token(client):
@@ -8,6 +24,45 @@ def test_reading_the_team_needs_a_login_token(client):
 
     assert response.status_code == 401
     assert response.get_json()["error"] == "unauthorized"
+
+
+def test_a_request_without_a_token_is_told_to_send_a_bearer_token(client):
+    # RFC 6750, section 3: a 401 says which kind of credential the API expects.
+    response = client.get("/team")
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+
+
+def test_a_refused_token_is_answered_as_an_invalid_bearer_token(client, token_for, attacker_key):
+    # RFC 6750, section 3.1: a token was sent but it is not valid.
+    response = client.get("/team", headers=token_for("player-1", signing_key=attacker_key))
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
+
+
+def test_an_unsigned_token_is_refused(client):
+    # Lab 10, a classic attack: the token says "alg": "none", so it needs no signature.
+    token, _ = _forged_token({"alg": "none", "typ": "JWT"})
+
+    response = client.get("/team", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
+
+
+def test_a_token_signed_with_the_public_key_as_a_shared_secret_is_refused(client, player_service_keys):
+    # Lab 10, a classic attack: HS256 "signed" with the public key, which everybody can read.
+    _, public_pem = player_service_keys
+    _, unsigned = _forged_token({"alg": "HS256", "typ": "JWT"})
+    signature = hmac.new(public_pem.encode(), unsigned.encode(), hashlib.sha256).digest()
+    token, _ = _forged_token({"alg": "HS256", "typ": "JWT"}, signature)
+
+    response = client.get("/team", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == 'Bearer error="invalid_token"'
 
 
 def test_a_token_not_signed_by_the_player_service_is_refused(client, token_for, attacker_key):

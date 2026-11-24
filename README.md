@@ -175,7 +175,8 @@ python -m pytest
 The Monster Service tests can be run from the repository root with:
 
 ```bash
-pytest monster_service/tests -q
+.\.venv\Scripts\python.exe -m pip install -r monster_service\requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest monster_service\tests -q
 ```
 
 ### Bruno API tests

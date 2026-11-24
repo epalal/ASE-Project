@@ -100,16 +100,14 @@ PostgreSQL database is also required.
 ## Testing instructions
 
 The automated tests use an in-memory SQLite database and generate a temporary
-RS256 key pair, so PostgreSQL and Docker are not required:
+RS256 key pair, so PostgreSQL and Docker are not required.
+
+From the repository root, install the Monster Service test dependencies in the
+project's main venv and run the tests directly without activating the venv:
 
 ```bash
-pytest
-```
-
-To run only the Monster Service tests from the repository root:
-
-```bash
-pytest monster_service/tests -q
+.\.venv\Scripts\python.exe -m pip install -r monster_service\requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest monster_service\tests -q
 ```
 
 The `tests/bruno` collection provides additional request-level checks for

@@ -1,12 +1,15 @@
 services:
   monster-db:
-    image: postgres:15-alpine
+    build: ./db
     environment:
       POSTGRES_USER: monster_admin
       POSTGRES_PASSWORD: ${MONSTER_DB_ADMIN_PASSWORD:?set it in .env}
       POSTGRES_DB: monster_db
+      POSTGRES_SSL_CERT_FILE: /certs/server.pem
+      POSTGRES_SSL_KEY_FILE: /certs/server.key
     volumes:
       - monster-db-data:/var/lib/postgresql/data
+      - monster-db-certs:/certs:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U monster_admin -d monster_db"]
       interval: 3s
@@ -17,8 +20,9 @@ services:
     build: .
     group_add: ["10000"]
     environment:
-      DATABASE_URL: postgresql://monster_admin:${MONSTER_DB_ADMIN_PASSWORD}@monster-db:5432/monster_db
+      DATABASE_URL: postgresql://monster_admin:${MONSTER_DB_ADMIN_PASSWORD}@monster-db:5432/monster_db?sslmode=verify-full&sslrootcert=/certs/ca.pem
       JWT_PUBLIC_KEY_PATH: /certs/jwt_public.pem
+      DATA_KEY_PATH: /certs/data.key
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it in .env}
     volumes:
       - monster-service-certs:/certs:ro

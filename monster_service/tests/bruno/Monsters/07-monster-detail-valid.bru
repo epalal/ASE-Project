@@ -1,0 +1,16 @@
+meta {
+  name: Monster Detail
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{monsterUrl}}/monsters/11
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq Cindrake
+}

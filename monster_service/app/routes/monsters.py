@@ -1,7 +1,7 @@
 import os
 from flask import Blueprint, jsonify, request, g, send_from_directory, current_app
 from sqlalchemy.exc import IntegrityError
-from ..models import AppliedReward, db, MonsterCatalog, PlayerMonster
+from ..models import AppliedReward, db, MonsterCatalog, PlayerMonster, player_id_lookup
 from ..initial_monsters import STARTER_MONSTER_IDS
 from ..auth import require_jwt, require_internal_secret
 
@@ -9,7 +9,8 @@ monsters_bp = Blueprint('monsters', __name__)
 
 # US-06: Initialization of starter monsters for a player
 def get_starter_monsters(player_id: str):
-    owned = PlayerMonster.query.filter_by(player_id=player_id).all()
+    player_lookup = player_id_lookup(player_id)
+    owned = PlayerMonster.query.filter_by(player_lookup=player_lookup).all()
     if not owned:
         try:
             for m_id in STARTER_MONSTER_IDS:
@@ -20,7 +21,7 @@ def get_starter_monsters(player_id: str):
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
-        owned = PlayerMonster.query.filter_by(player_id=player_id).all()
+        owned = PlayerMonster.query.filter_by(player_lookup=player_lookup).all()
     return owned
 
 # US-10: Full catalog of monsters
@@ -62,6 +63,8 @@ def get_player_collection():
 @monsters_bp.route('/internal/players/<player_id>/monsters', methods=['GET'])
 @require_internal_secret
 def get_player_monsters(player_id):
+    if not player_id or len(player_id) > 64:
+        return jsonify({"error": "player_id must be between 1 and 64 characters"}), 400
     owned_monsters = get_starter_monsters(player_id)
     return jsonify({
         "player_id": player_id,
@@ -77,10 +80,19 @@ def grant_reward():
     if not isinstance(data, dict):
         return jsonify({"error": "Request body must be a JSON object"}), 400
 
-    player_id = str(data.get("player_id", "")).strip()
-    encounter_id = str(data.get("encounter_id", "")).strip()
-    if not player_id or not encounter_id:
-        return jsonify({"error": "player_id and encounter_id are required"}), 400
+    player_id = data.get("player_id")
+    encounter_id = data.get("encounter_id")
+    if (
+        not isinstance(player_id, str)
+        or not player_id.strip()
+        or len(player_id.strip()) > 64
+        or not isinstance(encounter_id, str)
+        or not encounter_id.strip()
+        or len(encounter_id.strip()) > 64
+    ):
+        return jsonify({"error": "player_id and encounter_id must be non-empty strings of at most 64 characters"}), 400
+    player_id = player_id.strip()
+    encounter_id = encounter_id.strip()
 
     if db.session.get(AppliedReward, encounter_id):
         return jsonify({"message": "Reward for this encounter has already been granted"}), 200
@@ -110,7 +122,7 @@ def grant_reward():
                 return jsonify({"error": "Invalid stats reward payload"}), 400
 
             owned_monsters = PlayerMonster.query.filter(
-                PlayerMonster.player_id == player_id,
+                PlayerMonster.player_lookup == player_id_lookup(player_id),
                 PlayerMonster.id.in_(owned_ids),
             ).all()
             if len(owned_monsters) != len(set(owned_ids)):
@@ -132,7 +144,7 @@ def grant_reward():
         if not catalog_monster:
             return jsonify({"error": "captured_species_id does not exist in the catalog"}), 404
         if PlayerMonster.query.filter_by(
-            player_id=player_id,
+            player_lookup=player_id_lookup(player_id),
             monster_id=captured_species_id,
         ).first():
             return jsonify({"error": "Player already owns this species"}), 409

@@ -1,8 +1,7 @@
 import os
-from urllib.parse import urlparse, urlunparse
-from flask import Flask, send_from_directory, jsonify, g, request
-from sqlalchemy.exc import IntegrityError, OperationalError 
-from .models import db
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from flask import Flask, jsonify, g, request
+from .models import db, get_fernet, migrate_legacy_player_ids
 from .routes.monsters import monsters_bp
 from app.audit import audit
 
@@ -20,18 +19,27 @@ def resolve_database_url():
     raw_db_url = os.environ.get("DATABASE_URL")
 
     if not raw_db_url:
-        return f"postgresql://postgres:{db_password}@monster_db:5432/monster_db"
+        raw_db_url = f"postgresql://postgres:{db_password}@monster_db:5432/monster_db"
 
     parsed = urlparse(raw_db_url)
-    if not parsed.password and parsed.scheme.startswith("postgres"):
+    if not parsed.scheme.startswith("postgres"):
+        return raw_db_url
+
+    if not parsed.password:
         username = parsed.username or "postgres"
         hostname = parsed.hostname or "monster_db"
         netloc = f"{username}:{db_password}@{hostname}"
         if parsed.port:
             netloc += f":{parsed.port}"
-        return urlunparse(parsed._replace(netloc=netloc))
+        parsed = parsed._replace(netloc=netloc)
 
-    return raw_db_url
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["sslmode"] = "verify-full"
+    query.setdefault(
+        "sslrootcert",
+        os.environ.get("DATABASE_SSL_ROOT_CERT", "/certs/ca.pem"),
+    )
+    return urlunparse(parsed._replace(query=urlencode(query)))
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -43,22 +51,17 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
 
+    get_fernet()
     db.init_app(app)
     app.register_blueprint(monsters_bp)
 
-    @app.route('/assets/monsters/<path:filename>')
-    def serve_monster_images(filename):
-        return send_from_directory('static/assets/monsters', filename)
-     
     @app.route('/health', methods=['GET'])
     def health():
         return jsonify({"status": "ok", "service": "monster_service"}), 200
 
     with app.app_context():
-        try:
-            db.create_all()
-        except (IntegrityError, OperationalError):
-            db.session.rollback()
+        db.create_all()
+        migrate_legacy_player_ids()
         from .initial_monsters import init_catalog
         init_catalog()
 

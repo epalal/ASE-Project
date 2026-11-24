@@ -1,4 +1,17 @@
 services:
+  rate-limit-store:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    expose:
+      - "6379"
+    networks:
+      - gateway-rate-limit
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
   gateway:
     build: .
     container_name: api_gateway
@@ -11,9 +24,15 @@ services:
       ENCOUNTER_URL: https://encounter-service:5003
       CA_CERT_PATH: /certs/ca.pem
       FRONTEND_ORIGIN: http://localhost:8080
+      RATELIMIT_STORAGE_URI: redis://rate-limit-store:6379/0
     volumes:
       - gateway-certs:/certs:ro
+    networks:
+      - default
+      - gateway-rate-limit
     depends_on:
+      rate-limit-store:
+        condition: service_healthy
       player-service:
         condition: service_healthy
       monster-service:
@@ -29,3 +48,7 @@ services:
 
 volumes:
   gateway-certs:
+
+networks:
+  gateway-rate-limit:
+    internal: true

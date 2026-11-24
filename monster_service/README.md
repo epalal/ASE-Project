@@ -60,12 +60,22 @@ The service does not issue JWTs and does not own player authentication.
 ### Docker Compose
 
 From the `monster_service` directory, ensure the required files exist under
-`certs/` (`ca.pem`, `server.pem`, `server.key`, `db_password.txt`,
-`data_key.txt`, `jwt_private.pem`, and `jwt_public.pem`), then run:
+`certs/` (`ca.pem`, `server.pem`, `server.key`, `db_server.pem`,
+`db_server.key`, `db_password.txt`, `data_key.txt`, and `jwt_public.pem`).
+If the database certificate is missing, generate a self-signed certificate
+with the `monster_db` hostname. Set an internal secret before starting:
 
 ```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout certs/db_server.key -out certs/db_server.pem \
+  -subj "/CN=monster_db" -addext "subjectAltName=DNS:monster_db"
+export INTERNAL_SERVICE_SECRET='replace-with-a-random-secret'
 docker compose -f docker-compose.yaml up --build
 ```
+
+The standalone stack publishes the API only on `127.0.0.1:5002`; the database
+is reachable only from the internal Compose network. Both API and database
+traffic use TLS, and the database certificate is verified by the service.
 
 Use `-f docker-compose.yaml` for teardown too:
 
@@ -82,17 +92,16 @@ the repository-root stack and requires the root `.env`. Running bare
 commands from the repository root.
 
 The API is available at `https://localhost:5002`. Because the local
-certificate is self-signed, use `-k` with curl:
+certificate is self-signed, use `-k` with curl. The database connection is
+encrypted with TLS and verifies its self-signed certificate.
 
 ```bash
 curl -k https://localhost:5002/health
 curl -k https://localhost:5002/monsters
 ```
 
-Set `INTERNAL_SERVICE_SECRET` in the environment to override the local
-development default. The collection endpoint requires a valid JWT issued by
-the Player/Auth Service; internal endpoints require the
-`X-Internal-Secret` header.
+The collection endpoint requires a valid JWT issued by the Player/Auth
+Service; internal endpoints require the `X-Internal-Secret` header.
 
 ### Local Python process
 
@@ -104,12 +113,15 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 
 pip install -r requirements.txt
-flask --app "app:create_app()" run --port 5002
+flask --app "app:create_app()" run --host 0.0.0.0 --port 5002 \
+  --cert certs/server.pem --key certs/server.key
 ```
 
-Set `JWT_PUBLIC_KEY` (or `JWT_PUBLIC_KEY_PATH`) and
-`INTERNAL_SERVICE_SECRET` before starting the application. A reachable
-PostgreSQL database is also required.
+Set `JWT_PUBLIC_KEY` (or `JWT_PUBLIC_KEY_PATH`), `DATA_KEY_PATH`,
+`DATABASE_URL`, and `INTERNAL_SERVICE_SECRET` before starting the application.
+`DATABASE_URL` must use `sslmode=verify-full` and point `sslrootcert` at the
+trusted database certificate. A reachable PostgreSQL database with TLS enabled
+is also required.
 
 ## Testing instructions
 
@@ -187,6 +199,7 @@ monster_service/
 ├── tests/
 │   ├── test_monsters.py         # Flask integration tests
 │   └── bruno/                   # Bruno API request collection
+├── db/                          # PostgreSQL image with TLS startup
 ├── docker-compose.yaml          # Docker Compose definition
 ├── Dockerfile                   # Production container image
 ├── openapi.yaml                 # OpenAPI 3.0 API description
@@ -199,12 +212,13 @@ The application is created through the `create_app()` factory in
 `app/__init__.py`. Startup performs the following operations:
 
 1. Creates a Flask application.
-2. Builds the PostgreSQL connection using the `monster_db` host and the
-   `db_password` Docker secret (or the default local password).
-3. Initializes Flask-SQLAlchemy.
-4. Registers the monster blueprint.
-5. Creates database tables if they do not already exist.
-6. Seeds the catalogue when the `monster_catalog` table is empty.
+2. Loads the persistent Fernet key used to encrypt player IDs.
+3. Builds the PostgreSQL connection, requiring verified TLS.
+4. Initializes Flask-SQLAlchemy.
+5. Registers the monster blueprint.
+6. Creates database tables if they do not already exist and migrates legacy
+   plaintext player IDs to encrypted storage with a keyed lookup index.
+7. Seeds the catalogue when the `monster_catalog` table is empty.
 
 The catalogue seed is idempotent: existing catalogue rows are not duplicated.
 The default starter species are:
@@ -238,7 +252,10 @@ Represents one monster owned by a player:
 - `atk` and `hp`: player-specific values;
 - `acquired_at`: UTC acquisition timestamp;
 
-The database prevents a player from owning the same species more than once.
+The database stores the player ID encrypted with the persistent Fernet key.
+A keyed HMAC lookup index allows ownership queries without storing the ID in
+clear text. The database prevents a player from owning the same species more
+than once.
 
 ### `AppliedReward`
 
@@ -278,7 +295,7 @@ Example catalogue entry:
   "element": "Fire",
   "power": 3,
   "hp": 2,
-  "image_url": "/assets/monsters/emberbun.png"
+  "image_url": "/assets/monsters/Monster%20collection_9.jpeg"
 }
 ```
 
@@ -320,7 +337,7 @@ Response shape:
         "element": "Grass",
         "power": 2,
         "hp": 2,
-        "image_url": "/assets/monsters/sproutpaw.png"
+        "image_url": "/assets/monsters/Monster%20collection_1.jpeg"
       }
     }
   ]
@@ -417,7 +434,9 @@ Supported environment variables:
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Reserved for future configuration; currently ignored by the application |
+| `DATABASE_URL` | PostgreSQL connection URI; TLS is enforced with `sslmode=verify-full` |
+| `DATABASE_SSL_ROOT_CERT` | Trusted database CA path when `DATABASE_URL` omits `sslrootcert`; default `/certs/ca.pem` |
+| `DATA_KEY_PATH` | File containing the persistent Fernet key; default `/run/secrets/data_key` |
 | `JWT_PUBLIC_KEY` | PEM-encoded RSA public key; escaped `\n` sequences are expanded |
 | `JWT_PUBLIC_KEY_PATH` | File containing the public key; default `/certs/jwt_public.pem` |
 | `INTERNAL_SERVICE_SECRET` | Shared secret for internal endpoints |
@@ -436,7 +455,7 @@ docker compose -f docker-compose.yaml up --build
 The Compose file starts:
 
 - `monster_service`, exposed on `127.0.0.1:5002`;
-- `monster_db`, a PostgreSQL 15 instance on `127.0.0.1:5432`.
+- `monster_db`, a PostgreSQL 15 instance with TLS enabled on the internal network.
 
 The container listens on port `5002` with Flask's HTTPS development server. The
 certificate and key are mounted as Docker secrets; the image does not generate
@@ -449,13 +468,15 @@ The Compose file expects these files to exist before startup:
 certs/ca.pem
 certs/server.pem
 certs/server.key
+certs/db_server.pem
+certs/db_server.key
 certs/db_password.txt
 certs/data_key.txt
 ```
 
-The database password is read from `certs/db_password.txt`. `DATABASE_URL` is
-currently not used by the application, so changing that variable alone does
-not change the database connection.
+The database password is read from `certs/db_password.txt`. Generate
+`db_server.pem` and `db_server.key` as a self-signed certificate for
+`monster_db`; the API verifies it when opening the PostgreSQL connection.
 
 To check the service after startup:
 
@@ -506,20 +527,8 @@ configuration supplies this hostname automatically. Then start Flask through
 the application factory:
 
 ```bash
-flask --app "app:create_app()" run --port 5002
-```
-
-For a local process using HTTP:
-
-```bash
-flask --app "app:create_app()" run --host 0.0.0.0 --port 5002
-```
-
-For HTTPS outside Docker, provide the certificate and key explicitly:
-
-```bash
 flask --app "app:create_app()" run --host 0.0.0.0 --port 5002 \
-  --cert path/to/server.pem --key path/to/server.key
+  --cert certs/server.pem --key certs/server.key
 ```
 
 ## Testing

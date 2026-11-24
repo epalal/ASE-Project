@@ -1,0 +1,21 @@
+meta {
+  name: Internal Player Collection
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{monsterUrl}}/internal/players/test_player_01/monsters
+  body: none
+  auth: none
+}
+
+headers {
+  X-Internal-Secret: {{internalSecret}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.player_id: eq test_player_01
+  res.body.count: isNumber
+}

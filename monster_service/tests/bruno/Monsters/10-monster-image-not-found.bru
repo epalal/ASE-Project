@@ -1,0 +1,15 @@
+meta {
+  name: Monster Image Not Found
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{monsterUrl}}/assets/monsters/missing.jpeg
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+}

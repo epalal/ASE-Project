@@ -49,10 +49,11 @@ def require_jwt(fn):
         except jwt.InvalidTokenError:
             return _unauthorized("Invalid token")
 
-        player_id = str(claims.get("sub", "")).strip()
-        if not player_id:
+        player_id = claims.get("sub")
+        if not isinstance(player_id, str) or not player_id.strip() or len(player_id.strip()) > 64:
             return _unauthorized("Invalid subject in token")
 
+        player_id = player_id.strip()
         g.player_id = player_id
         g.username = claims.get("username")
         return fn(*args, **kwargs)
@@ -65,7 +66,11 @@ def require_internal_secret(f):
     def decorated(*args, **kwargs):
         expected_secret = os.environ.get("INTERNAL_SERVICE_SECRET")
         provided_secret = request.headers.get("X-Internal-Secret")
-        if not expected_secret or provided_secret != expected_secret:
+        if (
+            not expected_secret
+            or not provided_secret
+            or not hmac.compare_digest(provided_secret, expected_secret)
+        ):
             return jsonify({"error": "Access denied: invalid internal secret"}), 403
         return f(*args, **kwargs)
     return decorated

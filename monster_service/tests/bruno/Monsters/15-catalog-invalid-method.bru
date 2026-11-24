@@ -1,0 +1,19 @@
+meta {
+  name: Catalog Invalid Method
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{monsterUrl}}/monsters
+  body: json
+  auth: none
+}
+
+body:json {
+  {}
+}
+
+assert {
+  res.status: eq 405
+}

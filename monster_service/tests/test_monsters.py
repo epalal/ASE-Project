@@ -5,10 +5,12 @@ import pytest
 import jwt
 import json
 import logging
+from cryptography.fernet import Fernet
+from sqlalchemy import text
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from app import create_app
-from app.models import db
+from app.models import db, get_fernet, migrate_legacy_player_ids
 from app.audit import audit
 from datetime import datetime, timezone, timedelta
 
@@ -27,9 +29,12 @@ INTERNAL_SECRET = "test-internal-secret-key"
 
 # Set environment variables for the test
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     monkeypatch.setenv("JWT_PUBLIC_KEY", _TEST_PUB_PEM)
     monkeypatch.setenv("INTERNAL_SERVICE_SECRET", INTERNAL_SECRET)
+    data_key_path = tmp_path / "data.key"
+    data_key_path.write_bytes(Fernet.generate_key())
+    monkeypatch.setenv("DATA_KEY_PATH", str(data_key_path))
 
     app = create_app({
         "TESTING": True,
@@ -85,10 +90,12 @@ def test_get_single_monster_valid(client):
 # TEST US-11: "view a monster's image"
 def test_monster_image_retrieval_us11(client):
     """Test US-11: Verify that monster images are accessible to the client."""
-    response = client.get('/assets/monsters/Monster collection_1.jpeg')
-    assert response.status_code in [200, 404], "La rotta deve esistere e gestire la richiesta"
-    if response.status_code == 200:
-        assert response.mimetype in ['image/png', 'image/jpeg']
+    catalog = client.get("/monsters").get_json()
+    assert len(catalog) == 16
+    for monster in catalog:
+        response = client.get(monster["image_url"])
+        assert response.status_code == 200
+        assert response.mimetype == "image/jpeg"
 
 # TEST US-11: Invalid monster ID (outside the range 1-16)
 def test_get_single_monster_invalid_id(client):
@@ -108,6 +115,51 @@ def test_get_collection_lazy_init_valid(client):
     assert data["count"] == 3
     starter_ids = [item["monster"]["id"] for item in data["collection"]]
     assert sorted(starter_ids) == [1, 5, 9]
+    assert "secret_notes" not in data["collection"][0]
+
+    with client.application.app_context():
+        stored = db.session.execute(
+            text("SELECT player_id, secret_notes FROM player_monsters WHERE id = :id"),
+            {"id": data["collection"][0]["ownership_id"]},
+        ).one()
+    assert stored.player_id != "new_player_01"
+    assert stored.player_id.startswith("h1_")
+    assert stored.secret_notes != "new_player_01"
+
+def test_legacy_player_ids_are_encrypted_on_startup(client):
+    with client.application.app_context():
+        db.session.execute(
+            text(
+                "INSERT INTO player_monsters "
+                "(player_id, monster_id, atk, hp, acquired_at, secret_notes) "
+                "VALUES (:player_id, 1, 2, 2, CURRENT_TIMESTAMP, :secret_notes)"
+            ),
+            {"player_id": "legacy_player", "secret_notes": "Protected sensible data"},
+        )
+        db.session.execute(
+            text("DELETE FROM service_migrations WHERE name = :name"),
+            {"name": "encrypted-player-ids-v1"},
+        )
+        db.session.commit()
+        migrate_legacy_player_ids()
+
+        stored = db.session.execute(
+            text("SELECT player_id, secret_notes FROM player_monsters")
+        ).one()
+        assert stored.player_id.startswith("h1_")
+        assert stored.player_id != "legacy_player"
+
+    response = client.get(
+        "/internal/players/legacy_player/monsters",
+        headers={"X-Internal-Secret": INTERNAL_SECRET},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["collection"][0]["player_id"] == "legacy_player"
+
+def test_missing_data_key_fails_instead_of_generating_an_ephemeral_key(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_KEY_PATH", str(tmp_path / "missing.key"))
+    with pytest.raises(RuntimeError, match="Cannot read the Monster Service data key"):
+        get_fernet()
 
 # TEST US-06 & US-09: Invalid JWT token
 def test_get_collection_unauthorized_invalid(client):
@@ -156,6 +208,20 @@ def test_grant_reward_invalid_inputs(client):
     # 3. monster_id not found -> 404 Not Found
     res_not_found = client.post("/internal/rewards", json={"player_id": "p1", "captured_species_id": 999, "encounter_id": "e2"}, headers=headers)
     assert res_not_found.status_code == 404
+
+    res_invalid_ids = client.post(
+        "/internal/rewards",
+        json={"player_id": 12, "captured_species_id": 1, "encounter_id": "e3"},
+        headers=headers,
+    )
+    assert res_invalid_ids.status_code == 400
+
+    res_long_id = client.post(
+        "/internal/rewards",
+        json={"player_id": "p" * 65, "captured_species_id": 1, "encounter_id": "e4"},
+        headers=headers,
+    )
+    assert res_long_id.status_code == 400
 
 # TEST C10: Stats reward applies capped bonuses
 def test_stats_reward_applies_capped_bonuses(client):

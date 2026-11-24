@@ -20,6 +20,11 @@ jobs:
       - name: Install the Bruno CLI
         run: npm install -g @usebruno/cli@4.3.0
 
+      - name: Run Gateway rate-limit tests
+        run: |
+          pip install -r gateway/requirements.txt
+          RATELIMIT_STORAGE_URI=memory:// python3 -m pytest gateway/tests -q
+
       - name: Generate CI Secrets and Certificates
         run: |
           mkdir -p monster_service/certs
@@ -27,12 +32,13 @@ jobs:
           echo "U3VwZXJTZWNyZXRGZXJuZXRLZXlGb3JDSVRlc3RzISE=" > monster_service/certs/data_key.txt
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout monster_service/certs/server.key -out monster_service/certs/server.pem -subj "/CN=localhost"
           cp monster_service/certs/server.pem monster_service/certs/ca.pem
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout monster_service/certs/db_server.key -out monster_service/certs/db_server.pem -subj "/CN=monster_db" -addext "subjectAltName=DNS:monster_db"
           openssl genpkey -algorithm RSA -out /tmp/jwt_private.pem -pkeyopt rsa_keygen_bits:2048
           openssl rsa -pubout -in /tmp/jwt_private.pem -out monster_service/certs/jwt_public.pem
           chmod a+r monster_service/certs/*
 
       - name: Start monster_service database and API
-        run: docker compose -f monster_service/docker-compose.yaml up --build -d --wait
+        run: INTERNAL_SERVICE_SECRET=test-internal-secret-key docker compose -f monster_service/docker-compose.yaml up --build -d --wait
 
       - name: Run Component Tests with Bruno
         working-directory: monster_service/tests/bruno
@@ -41,8 +47,8 @@ jobs:
             echo '{"version": "1", "name": "monster_service_tests", "type": "collection"}' > bruno.json
           fi
           mkdir -p environments
-          python3 -c "import jwt, time; key=open('/tmp/jwt_private.pem').read(); now=int(time.time()); valid=jwt.encode({'iss':'player-service','sub':'test_player_01','username':'test','exp':now+3600},key,algorithm='RS256'); exp=jwt.encode({'iss':'player-service','sub':'test_player_01','username':'test','exp':now-3600},key,algorithm='RS256'); open('environments/local-component.bru','w').write(f'vars {{\n  monsterUrl: https://localhost:5002\n  internalSecret: test-internal-secret-key\n  testToken: {valid}\n  expiredToken: {exp}\n}}\n')"
-          bru run --env local-component --insecure
+          python3 -c "import jwt, time; key=open('/tmp/jwt_private.pem').read(); now=int(time.time()); valid=jwt.encode({'iss':'player-service','sub':'test_player_01','aud':'monster-tamers','username':'test','exp':now+3600},key,algorithm='RS256'); exp=jwt.encode({'iss':'player-service','sub':'test_player_01','aud':'monster-tamers','username':'test','exp':now-3600},key,algorithm='RS256'); open('environments/local-component.bru','w').write(f'vars {{\n  monsterUrl: https://localhost:5002\n  internalSecret: test-internal-secret-key\n  testToken: {valid}\n  expiredToken: {exp}\n}}\n')"
+          bru run --env local-component --cacert ../../certs/ca.pem
           
       - name: Show logs if failure
         if: failure()
@@ -65,6 +71,8 @@ jobs:
         run: bandit -r monster_service/app -x ./monster_service/tests --severity-level medium
       - name: Run pip-audit (Dependency Audit)
         run: pip-audit -r monster_service/requirements.txt
+      - name: Audit Gateway dependencies
+        run: pip-audit -r gateway/requirements.txt
 
   images:
     runs-on: ubuntu-24.04

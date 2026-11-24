@@ -1,0 +1,15 @@
+meta {
+  name: Monster Detail Not Found
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{monsterUrl}}/monsters/99
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+}

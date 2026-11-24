@@ -1,1 +1,2 @@
 encounter_service/db/01-app-user.sh text eol=lf
+monster_service/db/db-entrypoint.sh text eol=lf

@@ -51,7 +51,7 @@ components:
           example: 2
         image_url:
           type: string
-          example: /assets/monsters/Monster collection_1.jpeg
+          example: /assets/monsters/Monster%20collection_9.jpeg
 
     OwnedMonster:
       type: object
@@ -173,6 +173,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /assets/monsters/{filename}:
+    get:
+      summary: Returns a monster image
+      tags: [Catalog]
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Monster image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found
+
   /collection:
     get:
       summary: Returns the player's collection and performs Lazy Init on the first access (US-06, US-09)
@@ -217,8 +238,28 @@ paths:
       responses:
         '200':
           description: Player collection
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [player_id, count, collection]
+                properties:
+                  player_id:
+                    type: string
+                  count:
+                    type: integer
+                  collection:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OwnedMonster'
+        '400':
+          description: Player ID is empty or longer than 64 characters
         '403':
           description: Internal service authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /internal/rewards:
     post:
@@ -253,6 +294,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Player-owned monster or captured species not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Player already owns the captured species or the reward conflicts with an existing assignment
           content:
             application/json:
               schema:

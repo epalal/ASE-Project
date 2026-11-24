@@ -1,0 +1,15 @@
+meta {
+  name: Internal Player Collection Without Secret
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{monsterUrl}}/internal/players/test_player_01/monsters
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 403
+}

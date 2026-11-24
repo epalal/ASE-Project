@@ -1,0 +1,15 @@
+meta {
+  name: Monster Image
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{monsterUrl}}/assets/monsters/Monster%20collection_1.jpeg
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}

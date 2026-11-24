@@ -1,8 +1,11 @@
 import os
 import requests
-from flask import Flask, jsonify, request
+from flask import Blueprint, Flask, jsonify, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
-app = Flask(__name__)
+gateway_bp = Blueprint("gateway", __name__)
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 AUTH_URL = os.environ.get("AUTH_URL", "https://localhost:5001").rstrip("/")
 MONSTER_URL = os.environ.get("MONSTER_URL", "https://localhost:5002").rstrip("/")
@@ -42,15 +45,8 @@ def forward(method, url, **kwargs):
         return None, error("upstream_timeout", "An internal service did not respond in time", 504)
     except (requests.RequestException, ValueError):
         return None, error("upstream_error", "An internal service request failed", 502)
-    
-@app.after_request
-def allow_the_frontend(response):
-    response.headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
-    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
-    return response
 
-@app.post("/account")
+@gateway_bp.post("/account")
 def proxy_account():
     try:
         body = require_json_body()
@@ -62,7 +58,7 @@ def proxy_account():
         return failure
     return jsonify(data), 201
 
-@app.post("/login")
+@gateway_bp.post("/login")
 def proxy_login():
     try:
         body = require_json_body()
@@ -74,7 +70,7 @@ def proxy_login():
         return failure
     return jsonify(data), 200
 
-@app.get("/team")
+@gateway_bp.get("/team")
 def proxy_get_team():
     headers = {}
     if "Authorization" in request.headers:
@@ -85,7 +81,7 @@ def proxy_get_team():
         return failure
     return jsonify(data), 200
 
-@app.put("/team")
+@gateway_bp.put("/team")
 def proxy_put_team():
     try:
         body = require_json_body()
@@ -101,7 +97,7 @@ def proxy_put_team():
         return failure
     return jsonify(data), 200
 
-@app.get("/challenges")
+@gateway_bp.get("/challenges")
 def proxy_get_challenges():
     headers = {}
     if "Authorization" in request.headers:
@@ -112,7 +108,7 @@ def proxy_get_challenges():
         return failure
     return jsonify(data), 200
 
-@app.get("/encounters")
+@gateway_bp.get("/encounters")
 def proxy_get_history():
     headers = {}
     if "Authorization" in request.headers:
@@ -123,7 +119,7 @@ def proxy_get_history():
         return failure
     return jsonify(data), 200
 
-@app.get("/encounters/<encounter_id>")
+@gateway_bp.get("/encounters/<encounter_id>")
 def proxy_get_encounter(encounter_id):
     headers = {}
     if "Authorization" in request.headers:
@@ -134,7 +130,7 @@ def proxy_get_encounter(encounter_id):
         return failure
     return jsonify(data), 200
 
-@app.post("/encounters")
+@gateway_bp.post("/encounters")
 def proxy_post_encounters():
     try:
         body = require_json_body()
@@ -150,7 +146,7 @@ def proxy_post_encounters():
         return failure
     return jsonify(data), 201
 
-@app.post("/encounters/<encounter_id>/action")
+@gateway_bp.post("/encounters/<encounter_id>/action")
 def proxy_post_encounter_action(encounter_id):
     try:
         body = require_json_body()
@@ -166,7 +162,8 @@ def proxy_post_encounter_action(encounter_id):
         return failure
     return jsonify(data), 200
 
-@app.get("/monsters")
+@gateway_bp.get("/monsters")
+@limiter.limit("30 per minute")
 def proxy_get_monsters():
     """Returns the complete catalog of the 16 monsters (US-10)."""
     data, failure = forward("GET", f"{MONSTER_URL}/monsters")
@@ -174,7 +171,7 @@ def proxy_get_monsters():
         return failure
     return jsonify(data), 200
 
-@app.get("/monsters/<int:monster_id>")
+@gateway_bp.get("/monsters/<int:monster_id>")
 def proxy_get_monster_details(monster_id):
     """Returns the details of a specific monster (US-11)."""
     data, failure = forward("GET", f"{MONSTER_URL}/monsters/{monster_id}")
@@ -182,7 +179,8 @@ def proxy_get_monster_details(monster_id):
         return failure
     return jsonify(data), 200
 
-@app.get("/collection")
+@gateway_bp.get("/collection")
+@limiter.limit("30 per minute")
 def proxy_get_collection():
     """Returns the player's collection and performs Lazy Init on the first access (US-06, US-09)."""
     headers = {}
@@ -194,9 +192,41 @@ def proxy_get_collection():
         return failure
     return jsonify(data), 200
 
-@app.get("/health")
+@gateway_bp.get("/health")
 def health():
     return jsonify(status="ok"), 200
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, ssl_context=("/certs/server.pem", "/certs/server.key"))
+
+def create_app(test_config=None):
+    app = Flask(__name__)
+    app.config.from_mapping(
+        RATELIMIT_STORAGE_URI=os.environ.get(
+            "RATELIMIT_STORAGE_URI",
+            "redis://rate-limit-store:6379/0",
+        ),
+        RATELIMIT_HEADERS_ENABLED=True,
+    )
+    if test_config:
+        app.config.update(test_config)
+
+    limiter.init_app(app)
+    app.register_blueprint(gateway_bp)
+
+    @app.after_request
+    def allow_the_frontend(response):
+        response.headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
+        return response
+
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(_error):
+        return jsonify(error="rate_limit_exceeded", message="Too many requests"), 429
+
+    return app
+
+
+app = create_app()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5005, ssl_context=("/certs/server.pem", "/certs/server.key"))

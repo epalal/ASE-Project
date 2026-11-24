@@ -1,0 +1,15 @@
+meta {
+  name: Health Check Invalid Method
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{monsterUrl}}/health
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 405
+}

@@ -4,13 +4,14 @@ services:
   monster_service:
     build: .
     ports:
-      - "5002:5002"
+      - "127.0.0.1:5002:5002"
     volumes:
       - ./certs:/certs:ro
     environment:
-      DATABASE_URL: postgresql://postgres@monster_db:5432/monster_db
-      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-test-internal-secret-key}
+      DATABASE_URL: postgresql://postgres@monster_db:5432/monster_db?sslmode=verify-full&sslrootcert=/certs/db_server.pem
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it before starting the service}
       JWT_PUBLIC_KEY_PATH: /certs/jwt_public.pem
+      DATA_KEY_PATH: /run/secrets/data_key
     depends_on:
       monster_db:
         condition: service_healthy
@@ -25,14 +26,20 @@ services:
       - jwt_public
 
   monster_db:
-    image: postgres:15-alpine
+    build: ./db
     container_name: monster_db
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
       - POSTGRES_DB=monster_db
+      - POSTGRES_SSL_CERT_FILE=/run/secrets/monster_db_cert
+      - POSTGRES_SSL_KEY_FILE=/run/secrets/monster_db_key
     secrets:
       - db_password
+      - source: monster_db_cert
+        target: monster_db_cert
+      - source: monster_db_key
+        target: monster_db_key
     expose:
       - "5432"
     healthcheck:
@@ -54,3 +61,7 @@ secrets:
     file: ./certs/data_key.txt
   jwt_public:
     file: ./certs/jwt_public.pem
+  monster_db_cert:
+    file: ./certs/db_server.pem
+  monster_db_key:
+    file: ./certs/db_server.key

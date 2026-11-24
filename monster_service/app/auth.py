@@ -41,7 +41,8 @@ def require_jwt(fn):
                 public_key,
                 algorithms=["RS256"],
                 issuer="player-service",
-                options={"require": ["exp", "iss", "sub"]},
+                audience="monster-tamers",
+                options={"require": ["exp", "iss", "sub", "aud"]},
             )
         except jwt.ExpiredSignatureError:
             return _unauthorized("Token expired")

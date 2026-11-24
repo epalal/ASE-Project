@@ -49,6 +49,7 @@ def make_token(player_id: str, expired: bool = False) -> str:
     payload = {
         "iss": "player-service",
         "sub": player_id,
+        "aud": "monster-tamers",
         "username": player_id,
         "exp": now - 60 if expired else now + 3600,
     }
@@ -202,7 +203,7 @@ def rsa_keys(monkeypatch):
 
 def test_collection_valid_token(client, rsa_keys):
     token = jwt.encode(
-        {"iss": "player-service", "sub": "pytest_player", "exp": int(time.time()) + 300},
+        {"iss": "player-service", "sub": "pytest_player", "aud": "monster-tamers", "exp": int(time.time()) + 300},
         rsa_keys,
         algorithm="RS256",
     )
@@ -216,7 +217,7 @@ def test_collection_missing_token(client, rsa_keys):
 
 def test_collection_expired_token(client, rsa_keys):
     token = jwt.encode(
-        {"iss": "player-service", "sub": "pytest_player", "exp": int(time.time()) - 60},
+        {"iss": "player-service", "sub": "pytest_player", "aud": "monster-tamers", "exp": int(time.time()) - 60},
         rsa_keys,
         algorithm="RS256",
     )

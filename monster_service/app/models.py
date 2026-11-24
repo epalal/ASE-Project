@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.types import TypeDecorator, String
@@ -6,11 +7,14 @@ from cryptography.fernet import Fernet
 db = SQLAlchemy()
 
 def get_fernet():
+    key_path = os.environ.get("DATA_KEY_PATH", "/run/secrets/data_key")
     try:
-        with open("/run/secrets/data_key", "r") as f:
+        with open(key_path, "r") as f:
             key = f.read().strip()
         return Fernet(key.encode())
-    except IOError:
+    except OSError:
+        # Component tests and the root stack do not persist Monster's optional
+        # encrypted note field; the standalone deployment supplies the secret.
         return Fernet(Fernet.generate_key())
 fernet = get_fernet()
 

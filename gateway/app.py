@@ -35,8 +35,6 @@ def forward(method, url, **kwargs):
         
         if res.content:
             data = res.json()
-            if not isinstance(data, dict):
-                raise ValueError("Internal service returned non-object JSON")
             return data, None
         return {}, None
 

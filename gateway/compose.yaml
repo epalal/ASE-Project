@@ -10,7 +10,7 @@ services:
       MONSTER_URL: https://monster-service:5002
       ENCOUNTER_URL: https://encounter-service:5003
       CA_CERT_PATH: /certs/ca.pem
-      FRONTEND_ORIGIN: https://localhost:8080
+      FRONTEND_ORIGIN: http://localhost:8080
     volumes:
       - gateway-certs:/certs:ro
     depends_on:

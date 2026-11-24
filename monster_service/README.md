@@ -67,6 +67,20 @@ From the `monster_service` directory, ensure the required files exist under
 docker compose -f docker-compose.yaml up --build
 ```
 
+Use `-f docker-compose.yaml` for teardown too:
+
+```bash
+docker compose -f docker-compose.yaml down -v
+```
+
+The `-v` option deletes this stack's database volume.
+
+This directory also contains `compose.yaml`, which is a fragment included by
+the repository-root stack and requires the root `.env`. Running bare
+`docker compose down -v` here may select that fragment instead of the standalone
+`docker-compose.yaml`. To stop the complete project stack, run its Compose
+commands from the repository root.
+
 The API is available at `https://localhost:5002`. Because the local
 certificate is self-signed, use `-k` with curl:
 

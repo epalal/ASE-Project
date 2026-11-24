@@ -97,6 +97,11 @@ file is ignored by Git and must never be committed.
 
 ### Start the current root stack
 
+Run the following commands from the repository root. If your terminal is in a
+service directory such as `monster_service`, return to the root first with
+`Set-Location ..`; otherwise Compose may select that directory's local Compose
+file and miss the root `.env`.
+
 The root Compose file starts the TLS initializer, Player Service and its
 database, Encounter Service and its database, API Gateway, and frontend:
 

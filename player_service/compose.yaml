@@ -1,27 +1,42 @@
-services:
-  player-db-init:
-    build: .
-    user: root
-    command: ["sh", "-c", "chown -R appuser:appuser /data"]
-    volumes:
-      - player-db-data:/data
+x-certificate-group: &certificate-group
+  group_add: ["10000"]
 
-  player-service:
-    build: .
+services:
+  player-db:
+    build: ./db
+    <<: *certificate-group
     environment:
-      DATABASE_URL: sqlite:////data/player_db.sqlite3
+      POSTGRES_USER: player_admin
+      POSTGRES_PASSWORD: ${PLAYER_DB_ADMIN_PASSWORD:?set it in .env}
+      POSTGRES_DB: player_db
+      PLAYER_DB_PASSWORD: ${PLAYER_DB_PASSWORD:?set it in .env}
     volumes:
-      - player-service-certs:/certs:ro
-      - player-db-data:/data
-    group_add:
-      - "10000"
+      - player-db-certs:/certs:ro
+      - player-db-data:/var/lib/postgresql/data
     depends_on:
       tls-init:
         condition: service_completed_successfully
-      player-db-init:
-        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import ssl, urllib.request; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:5001/health', context=ctx, timeout=2)"]
+      test: ["CMD", "pg_isready", "-h", "localhost", "-U", "player_admin", "-d", "player_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  player-service:
+    build: .
+    <<: *certificate-group
+    environment:
+      DATABASE_URL: "postgresql://player_app:${PLAYER_DB_PASSWORD}@player-db:5432/player_db?sslmode=verify-full&sslrootcert=/certs/ca.pem"
+      JWT_PRIVATE_KEY_PATH: /certs/jwt_private.pem
+    volumes:
+      - player-service-certs:/certs:ro
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+      player-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
       interval: 5s
       timeout: 3s
       retries: 10

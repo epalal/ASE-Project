@@ -71,6 +71,6 @@ def require_internal_secret(f):
             or not provided_secret
             or not hmac.compare_digest(provided_secret, expected_secret)
         ):
-            return jsonify({"error": "Access denied: invalid internal secret"}), 403
+            return jsonify({"error": "forbidden", "message": "Access denied: invalid internal secret"}), 403
         return f(*args, **kwargs)
     return decorated

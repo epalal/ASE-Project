@@ -1,6 +1,7 @@
 services:
   rate-limit-store:
     image: redis:7-alpine
+    user: redis
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     expose:
       - "6379"
@@ -31,6 +32,8 @@ services:
       - default
       - gateway-rate-limit
     depends_on:
+      tls-init:
+        condition: service_completed_successfully
       rate-limit-store:
         condition: service_healthy
       player-service:

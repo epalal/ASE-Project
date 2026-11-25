@@ -1,3 +1,4 @@
+import json
 import os
 from flask import Blueprint, jsonify, request, g, send_from_directory, current_app
 from sqlalchemy.exc import IntegrityError
@@ -6,6 +7,34 @@ from ..initial_monsters import STARTER_MONSTER_IDS
 from ..auth import require_jwt, require_internal_secret
 
 monsters_bp = Blueprint('monsters', __name__)
+
+
+def _error(code: str, message: str, status: int):
+    return jsonify({"error": code, "message": message}), status
+
+
+def _is_valid_id(value) -> bool:
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= 64
+        and value == value.strip()
+        and value.isprintable()
+    )
+
+
+def _reject_json_constant(constant: str):
+    raise ValueError(f"Unsupported JSON constant: {constant}")
+
+
+def _parse_json_object():
+    raw = request.get_data(as_text=True)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw, parse_constant=_reject_json_constant)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
 
 # US-06: Initialization of starter monsters for a player
 def get_starter_monsters(player_id: str):
@@ -34,10 +63,10 @@ def get_catalog():
 @monsters_bp.route('/monsters/<int:monster_id>', methods=['GET'])
 def get_monster_detail(monster_id):
     if monster_id < 1 or monster_id > 16:
-        return jsonify({"error": "ID not valid (must be between 1 and 16)"}), 404
+        return _error("monster_not_found", "ID not valid (must be between 1 and 16)", 404)
     monster = db.session.get(MonsterCatalog, monster_id)
     if not monster:
-        return jsonify({"error": "Monster not found"}), 404
+        return _error("monster_not_found", "Monster not found", 404)
     return jsonify(monster.to_dict()), 200
 
 # US-11: Serve monster images from the static assets directory (safer implementation for accessing images)
@@ -63,8 +92,8 @@ def get_player_collection():
 @monsters_bp.route('/internal/players/<player_id>/monsters', methods=['GET'])
 @require_internal_secret
 def get_player_monsters(player_id):
-    if not player_id or len(player_id) > 64:
-        return jsonify({"error": "player_id must be between 1 and 64 characters"}), 400
+    if not _is_valid_id(player_id):
+        return _error("invalid_input", "player_id must be 1 to 64 printable characters", 400)
     owned_monsters = get_starter_monsters(player_id)
     return jsonify({
         "player_id": player_id,
@@ -76,23 +105,18 @@ def get_player_monsters(player_id):
 @monsters_bp.route('/internal/rewards', methods=['POST'])
 @require_internal_secret
 def grant_reward():
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify({"error": "Request body must be a JSON object"}), 400
+    data = _parse_json_object()
+    if data is None:
+        return _error("invalid_input", "Request body must be a valid JSON object", 400)
 
     player_id = data.get("player_id")
     encounter_id = data.get("encounter_id")
-    if (
-        not isinstance(player_id, str)
-        or not player_id.strip()
-        or len(player_id.strip()) > 64
-        or not isinstance(encounter_id, str)
-        or not encounter_id.strip()
-        or len(encounter_id.strip()) > 64
-    ):
-        return jsonify({"error": "player_id and encounter_id must be non-empty strings of at most 64 characters"}), 400
-    player_id = player_id.strip()
-    encounter_id = encounter_id.strip()
+    if not _is_valid_id(player_id) or not _is_valid_id(encounter_id):
+        return _error(
+            "invalid_input",
+            "player_id and encounter_id must be 1 to 64 printable characters",
+            400,
+        )
 
     if db.session.get(AppliedReward, encounter_id):
         return jsonify({"message": "Reward for this encounter has already been granted"}), 200
@@ -100,7 +124,7 @@ def grant_reward():
     has_stats = "owned_monster_ids" in data
     has_capture = "captured_species_id" in data
     if has_stats == has_capture:
-        return jsonify({"error": "Specify either a stats reward or a capture reward"}), 400
+        return _error("invalid_input", "Specify either a stats reward or a capture reward", 400)
 
     get_starter_monsters(player_id)
     try:
@@ -111,7 +135,7 @@ def grant_reward():
             if (
                 not isinstance(owned_ids, list)
                 or not owned_ids
-                or any(not isinstance(item, int) or isinstance(item, bool) for item in owned_ids)
+                or any(not isinstance(item, int) or isinstance(item, bool) or item < 1 for item in owned_ids)
                 or not isinstance(atk_bonus, int)
                 or isinstance(atk_bonus, bool)
                 or not isinstance(hp_bonus, int)
@@ -119,14 +143,14 @@ def grant_reward():
                 or atk_bonus < 0
                 or hp_bonus < 0
             ):
-                return jsonify({"error": "Invalid stats reward payload"}), 400
+                return _error("invalid_input", "Invalid stats reward payload", 400)
 
             owned_monsters = PlayerMonster.query.filter(
                 PlayerMonster.player_lookup == player_id_lookup(player_id),
                 PlayerMonster.id.in_(owned_ids),
             ).all()
             if len(owned_monsters) != len(set(owned_ids)):
-                return jsonify({"error": "One or more owned_monster_ids do not belong to player_id"}), 404
+                return _error("not_found", "One or more owned_monster_ids do not belong to player_id", 404)
             for owned_monster in owned_monsters:
                 owned_monster.atk = min(owned_monster.atk + atk_bonus, owned_monster.monster.power + 3)
                 owned_monster.hp = min(owned_monster.hp + hp_bonus, owned_monster.monster.hp + 3)
@@ -139,15 +163,15 @@ def grant_reward():
 
         captured_species_id = data["captured_species_id"]
         if not isinstance(captured_species_id, int) or isinstance(captured_species_id, bool):
-            return jsonify({"error": "captured_species_id must be an integer"}), 400
+            return _error("invalid_input", "captured_species_id must be an integer", 400)
         catalog_monster = db.session.get(MonsterCatalog, captured_species_id)
         if not catalog_monster:
-            return jsonify({"error": "captured_species_id does not exist in the catalog"}), 404
+            return _error("not_found", "captured_species_id does not exist in the catalog", 404)
         if PlayerMonster.query.filter_by(
             player_lookup=player_id_lookup(player_id),
             monster_id=captured_species_id,
         ).first():
-            return jsonify({"error": "Player already owns this species"}), 409
+            return _error("already_owned", "Player already owns this species", 409)
 
         new_reward = PlayerMonster(
             player_id=player_id,
@@ -162,7 +186,7 @@ def grant_reward():
         db.session.rollback()
         if db.session.get(AppliedReward, encounter_id):
             return jsonify({"message": "Reward for this encounter has already been granted"}), 200
-        return jsonify({"error": "Conflict in reward assignment"}), 409
+        return _error("conflict", "Conflict in reward assignment", 409)
 
     return jsonify({
         "message": "Monster reward granted successfully",

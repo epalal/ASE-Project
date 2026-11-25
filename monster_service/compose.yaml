@@ -1,26 +1,34 @@
+x-certificate-group: &certificate-group
+  group_add: ["10000"]
+
 services:
   monster-db:
     build: ./db
+    <<: *certificate-group
     environment:
       POSTGRES_USER: monster_admin
       POSTGRES_PASSWORD: ${MONSTER_DB_ADMIN_PASSWORD:?set it in .env}
       POSTGRES_DB: monster_db
+      MONSTER_DB_PASSWORD: ${MONSTER_DB_PASSWORD:?set it in .env}
       POSTGRES_SSL_CERT_FILE: /certs/server.pem
       POSTGRES_SSL_KEY_FILE: /certs/server.key
     volumes:
       - monster-db-data:/var/lib/postgresql/data
       - monster-db-certs:/certs:ro
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U monster_admin -d monster_db"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -U monster_admin -d monster_db"]
       interval: 3s
       timeout: 3s
       retries: 20
 
   monster-service:
     build: .
-    group_add: ["10000"]
+    <<: *certificate-group
     environment:
-      DATABASE_URL: postgresql://monster_admin:${MONSTER_DB_ADMIN_PASSWORD}@monster-db:5432/monster_db?sslmode=verify-full&sslrootcert=/certs/ca.pem
+      DATABASE_URL: "postgresql://monster_app:${MONSTER_DB_PASSWORD}@monster-db:5432/monster_db?sslmode=verify-full&sslrootcert=/certs/ca.pem"
       JWT_PUBLIC_KEY_PATH: /certs/jwt_public.pem
       DATA_KEY_PATH: /certs/data.key
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?set it in .env}

@@ -32,7 +32,16 @@ def require_player(view):
             response, status = error("unauthorized", "A valid login token is required.", 401)
             response.headers["WWW-Authenticate"] = 'Bearer error="invalid_token"'
             return response, status
-        g.player_id = str(claims["sub"])
+        player_id = claims.get("sub")
+        if (
+            not isinstance(player_id, str)
+            or not 0 < len(player_id.strip()) <= 64
+            or not player_id.strip().isprintable()
+        ):
+            response, status = error("unauthorized", "A valid login token is required.", 401)
+            response.headers["WWW-Authenticate"] = 'Bearer error="invalid_token"'
+            return response, status
+        g.player_id = player_id.strip()
         return view(*args, **kwargs)
 
     return guarded

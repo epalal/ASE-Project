@@ -148,6 +148,12 @@ def history():
 def _players_encounter(encounter_id):
     """The player's own encounter, or None. Another player's encounter counts as
     missing too, so the answer gives no hint about which IDs exist."""
+    if (
+        not isinstance(encounter_id, str)
+        or not 1 <= len(encounter_id) <= 36
+        or not encounter_id.isprintable()
+    ):
+        return None
     encounter = db.session.get(Encounter, encounter_id)
     if encounter is None or encounter.player_id != g.player_id:
         return None

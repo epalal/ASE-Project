@@ -90,8 +90,8 @@ def migrate_legacy_player_ids():
     db.session.commit()
 
 class EncryptedField(TypeDecorator):
-    """Crittograph data in write and decrypt in read. This is a simple implementation and should be improved for production use."""
-    impl = String
+    """Encrypts sensitive fields on write and decrypts on read using Fernet."""
+    impl = db.Text
     cache_ok = True
 
     def process_bind_param(self, value, dialect):
@@ -142,16 +142,24 @@ class PlayerMonster(db.Model):
 
     @validates("player_id")
     def set_player_id(self, key, value):
-        if not isinstance(value, str) or not value.strip() or len(value) > 64:
-            raise ValueError("player_id must be a non-empty string of at most 64 characters")
+        if (
+            not isinstance(value, str)
+            or not value.strip()
+            or len(value) > 64
+            or not value.isprintable()
+        ):
+            raise ValueError("player_id must be a non-empty printable string of at most 64 characters")
         self.player_lookup = player_id_lookup(value)
         return value
 
     def to_dict(self):
+        acquired = self.acquired_at
+        if acquired.tzinfo is None:
+            acquired = acquired.replace(tzinfo=timezone.utc)
         return {
             "ownership_id": self.id,
             "player_id": self.player_id,
-            "acquired_at": self.acquired_at.isoformat(),
+            "acquired_at": acquired.astimezone(timezone.utc).isoformat(),
             "atk": self.atk,
             "hp": self.hp,
             "monster": self.monster.to_dict()

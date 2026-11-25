@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: Gateway API to connect user services
 servers:
-- url: http://localhost:5005
+- url: https://localhost:5005
 paths:
   /account:
     post:
@@ -218,6 +218,35 @@ paths:
                 $ref: '#/components/schemas/Error'
 
   /encounters:
+    get:
+      summary: List player encounters
+      description: Retrieves the player's closed encounters, newest first.
+      operationId: listEncounters
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Encounters retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
       summary: Open encounter
       description: Opens a new encounter for a given challenge.
@@ -260,6 +289,48 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: Conflict (e.g., no team)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /encounters/{encounter_id}:
+    get:
+      summary: Get encounter details
+      description: Retrieves a single encounter belonging to the authenticated player.
+      operationId: getEncounter
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+        - in: path
+          name: encounter_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Encounter retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Encounter not found
           content:
             application/json:
               schema:
@@ -371,6 +442,64 @@ paths:
                 $ref: '#/components/schemas/Monster'
         '404':
           description: Monster not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Upstream service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /assets/monsters/{filename}:
+    get:
+      summary: Get monster image asset
+      description: Retrieves monster artwork proxied from the Monster Service.
+      operationId: getMonsterAsset
+      parameters:
+        - in: path
+          name: filename
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Image asset retrieved successfully
+        '404':
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /collection:
+    get:
+      summary: Get player monster collection
+      description: Retrieves the authenticated player's collection (initializing starters on first access).
+      operationId: getCollection
+      parameters:
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Collection retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
           content:
             application/json:
               schema:

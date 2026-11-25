@@ -1,41 +1,26 @@
-# Component tests of the Player Service: the real service with its database,
-# published only on this computer for Bruno (tests_player/bruno).
+# Component tests of the Player Service: the real service with its PostgreSQL TLS
+# database, published only on this computer for Bruno (tests_player/bruno).
 name: player-component
 
 include:
   - tls_init/compose.yaml
 
+x-certificate-group: &certificate-group
+  group_add: ["10000"]
+
 services:
-  player-db-init:
-    build: ./player_service
-    user: root
-    command: ["sh", "-c", "chown -R appuser:appuser /data"]
-    volumes:
-      - player-db-data:/data
+  player-db:
+    extends:
+      file: player_service/compose.yaml
+      service: player-db
 
   player-service:
-    build: ./player_service
+    extends:
+      file: player_service/compose.yaml
+      service: player-service
     container_name: player-service
-    environment:
-      DATABASE_URL: sqlite:////data/player_db.sqlite3
-    volumes:
-      - player-service-certs:/certs:ro
-      - player-db-data:/data
     ports:
       - "127.0.0.1:5001:5001"
-    group_add:
-      - "10000"
-    depends_on:
-      tls-init:
-        condition: service_completed_successfully
-      player-db-init:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 5s
 
 volumes:
   player-db-data:

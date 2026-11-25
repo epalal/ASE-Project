@@ -56,6 +56,8 @@ jobs:
 
       - name: Stop stack
         if: always()
+        env:
+          INTERNAL_SERVICE_SECRET: test-internal-secret-key
         run: docker compose -f monster_service/docker-compose.yaml down -v
   
   security:

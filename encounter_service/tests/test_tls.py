@@ -1,6 +1,7 @@
 """Design rule 7: services talk over HTTPS with certificates from our own
 certificate authority, made by tls_init/make_certs.py, and refuse any other."""
 
+import os
 import stat
 
 import jwt
@@ -89,18 +90,26 @@ def _permissions(path):
     return stat.S_IMODE(path.stat().st_mode)
 
 
-# Lab 8: the key that encrypts the stored encounters. Lose it and the encounters
-# can no longer be read, so a restart must keep it.
-def test_only_the_encounter_service_gets_a_data_key_and_a_restart_keeps_it(tls):
-    data_key = tls / "encounter-service" / "data.key"
-    key_before = data_key.read_bytes()
+def _assert_permissions(path, expected):
+    assert path.exists()
+    if os.name != "nt":
+        assert _permissions(path) == expected
+
+
+# Services that encrypt persisted records must keep their data keys across restarts.
+def test_record_encrypting_services_keep_their_data_keys_across_restarts(tls):
+    data_keys = {
+        "encounter-service": tls / "encounter-service" / "data.key",
+        "monster-service": tls / "monster-service" / "data.key",
+    }
+    keys_before = {service: path.read_bytes() for service, path in data_keys.items()}
 
     make_certs(tls, services=["monster-service", "encounter-service", "player-service"])
 
-    Fernet(key_before)  # raises if it is not a Fernet key
-    assert data_key.read_bytes() == key_before
-    assert _permissions(data_key) == 0o640  # like the other service keys
-    assert not (tls / "monster-service" / "data.key").exists()
+    for service, data_key in data_keys.items():
+        Fernet(keys_before[service])  # raises if it is not a Fernet key
+        assert data_key.read_bytes() == keys_before[service]
+        _assert_permissions(data_key, 0o640)
     assert not (tls / "player-service" / "data.key").exists()
 
 
@@ -108,10 +117,10 @@ def test_private_keys_can_be_read_only_by_their_owner_and_the_certificate_group(
     # Every service runs as its own non-root user and reads its key through the
     # certificate group, which it joins in Docker Compose. The authority's keys
     # stay with tls-init alone.
-    assert _permissions(tls / "encounter-service" / "server.key") == 0o640
-    assert _permissions(tls / "player-service" / "jwt_private.pem") == 0o640
-    assert _permissions(tls / "ca" / "ca.key") == 0o600
-    assert _permissions(tls / "ca" / "jwt_private.pem") == 0o600
+    _assert_permissions(tls / "encounter-service" / "server.key", 0o640)
+    _assert_permissions(tls / "player-service" / "jwt_private.pem", 0o640)
+    _assert_permissions(tls / "ca" / "ca.key", 0o600)
+    _assert_permissions(tls / "ca" / "jwt_private.pem", 0o600)
 
 
 def test_a_token_signed_by_the_player_service_is_accepted_by_the_other_services(tls):

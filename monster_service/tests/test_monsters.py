@@ -27,6 +27,14 @@ os.environ.pop("JWT_PUBLIC_KEY_PATH", None)
 
 INTERNAL_SECRET = "test-internal-secret-key"
 
+
+def test_missing_internal_secret_fails_app_startup(monkeypatch):
+    monkeypatch.delenv("INTERNAL_SERVICE_SECRET", raising=False)
+
+    with pytest.raises(RuntimeError, match="INTERNAL_SERVICE_SECRET must be set"):
+        create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+
+
 # Set environment variables for the test
 @pytest.fixture
 def client(monkeypatch, tmp_path):
@@ -376,3 +384,42 @@ def test_audit_log_on_collection_and_no_secret_leak(client, caplog):
     assert second["user"] == "player_audit"
     assert token not in caplog.text
     assert "\n" not in records[2].getMessage()
+
+
+@pytest.mark.parametrize(
+    "raw_body",
+    [
+        '{"player_id": "p1", "captured_species_id": NaN, "encounter_id": "e1"}',
+        '{"player_id": "p1", "captured_species_id": 1e999, "encounter_id": "e1"}',
+        '{"player_id": "p1\\u0000", "captured_species_id": 1, "encounter_id": "e1"}',
+        '{"player_id": "p1", "captured_species_id": 1, "encounter_id": "e1\\n"}',
+    ],
+)
+def test_grant_reward_rejects_hostile_json_and_control_chars(client, raw_body):
+    res = client.post(
+        "/internal/rewards",
+        data=raw_body,
+        content_type="application/json",
+        headers={"X-Internal-Secret": INTERNAL_SECRET},
+    )
+    assert res.status_code == 400
+    body = res.get_json()
+    assert body["error"] == "invalid_input"
+    assert "message" in body
+
+
+def test_monster_service_errors_follow_standard_json_shape(client):
+    not_found = client.get("/does-not-exist")
+    assert not_found.status_code == 404
+    assert "error" in not_found.get_json()
+    assert "message" in not_found.get_json()
+
+    huge = '{"player_id": "' + "a" * 11_000 + '", "captured_species_id": 1, "encounter_id": "e1"}'
+    too_large = client.post(
+        "/internal/rewards",
+        data=huge,
+        content_type="application/json",
+        headers={"X-Internal-Secret": INTERNAL_SECRET},
+    )
+    assert too_large.status_code == 413
+    assert too_large.get_json()["error"] == "request_entity_too_large"

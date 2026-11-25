@@ -1,5 +1,7 @@
 FROM python:3.12-slim
 
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /gateway
 
 COPY requirements.txt .
@@ -14,4 +16,4 @@ USER appuser
 
 EXPOSE 5005
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--certfile", "/certs/server.pem", "--keyfile", "/certs/server.key", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5005", "--workers", "2", "--threads", "4", "--certfile", "/certs/server.pem", "--keyfile", "/certs/server.key", "--access-logfile", "-", "app:create_app()"]

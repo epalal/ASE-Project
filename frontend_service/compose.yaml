@@ -2,7 +2,5 @@ services:
   file-server:
     build: .
     ports:
-      - "127.0.0.1:8080:80"
-    volumes:
-      - ./files:/srv/files:ro
+      - "127.0.0.1:8080:8080"
     restart: unless-stopped

@@ -91,6 +91,8 @@ def create_app(test_config=None, monster_client=None, draw=None, clock=None):
     with app.app_context():
         db.create_all()
         load_challenges()
+        if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
+            db.engine.dispose()
 
     @app.get("/health")
     def health():

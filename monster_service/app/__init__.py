@@ -1,9 +1,10 @@
 import os
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from flask import Flask, jsonify, g, request
+from werkzeug.exceptions import HTTPException
 from .models import db, get_fernet, migrate_legacy_player_ids
 from .routes.monsters import monsters_bp
-from app.audit import audit
+from .audit import audit
 
 def read_secret(secret_name, default=None):
     """Reads a secret from the Docker secrets directory. If the secret is not found, returns the default value."""
@@ -41,11 +42,19 @@ def resolve_database_url():
     )
     return urlunparse(parsed._replace(query=urlencode(query)))
 
+MAX_BODY_BYTES = 10_000
+
+
 def create_app(test_config=None):
+    internal_secret = os.environ.get("INTERNAL_SERVICE_SECRET", "")
+    if not internal_secret.strip():
+        raise RuntimeError("INTERNAL_SERVICE_SECRET must be set before starting the Monster Service")
+
     app = Flask(__name__)
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=resolve_database_url(),
-        SQLALCHEMY_TRACK_MODIFICATIONS=False
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        MAX_CONTENT_LENGTH=MAX_BODY_BYTES,
     )
 
     if test_config:
@@ -54,6 +63,15 @@ def create_app(test_config=None):
     get_fernet()
     db.init_app(app)
     app.register_blueprint(monsters_bp)
+
+    @app.errorhandler(HTTPException)
+    def handle_http_error(exc):
+        return jsonify(error=exc.name.lower().replace(" ", "_"), message=exc.description), exc.code
+
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(_exc):
+        db.session.rollback()
+        return jsonify(error="server_error", message="An unexpected error occurred"), 500
 
     @app.route('/health', methods=['GET'])
     def health():
@@ -64,6 +82,8 @@ def create_app(test_config=None):
         migrate_legacy_player_ids()
         from .initial_monsters import init_catalog
         init_catalog()
+        if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
+            db.engine.dispose()
 
     @app.after_request
     def audit_request(response):

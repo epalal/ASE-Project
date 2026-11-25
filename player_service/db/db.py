@@ -1,25 +1,19 @@
-import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import uuid
 from datetime import datetime, timezone
 
-Base = declarative_base()
+from flask_sqlalchemy import SQLAlchemy
 
-class User(Base):
-    __tablename__ = 'users'
+db = SQLAlchemy()
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String, nullable=False, unique=True)
-    password_hashed = Column(String, nullable=False)
-    created_at = Column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+
+class User(db.Model):
+    __tablename__ = "users"
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = db.Column(db.String(64), nullable=False, unique=True)
+    password_hashed = db.Column(db.String(128), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
-
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///player_db.sqlite3")
-engine = create_engine(DATABASE_URL, echo=True)
-SessionLocal = sessionmaker(bind=engine)
-
-# Ensure the schema exists when the service starts under Gunicorn.
-Base.metadata.create_all(engine)

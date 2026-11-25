@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false  # a failure in one service does not hide the others
       matrix:
-        service: [encounter_service]
+        service: [encounter_service, monster_service, player_service, gateway]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -96,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        folder: [encounter_service, tls_init, monster_stub, player_stub]
+        folder: [encounter_service, player_service, monster_service, gateway, tls_init, monster_stub, player_stub]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -126,7 +126,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        folder: [encounter_service, encounter_service/db, tls_init, monster_stub, player_stub]
+        folder:
+          - encounter_service
+          - encounter_service/db
+          - player_service
+          - player_service/db
+          - monster_service
+          - monster_service/db
+          - gateway
+          - frontend_service
+          - tls_init
+          - monster_stub
+          - player_stub
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7

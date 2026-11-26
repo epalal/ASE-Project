@@ -1,6 +1,4 @@
-# Component tests of the Player Service: the real service with its database,
-# published only on this computer for Bruno (tests_player/bruno).
-name: player-component
+name: player-service
 
 include:
   - tls_init/compose.yaml

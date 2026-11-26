@@ -6,7 +6,7 @@ info:
   description: API for management of sign in and login operations.
 
 servers:
-  - url: http://localhost:5001
+  - url: https://localhost:5001
 
 paths:
   /account:

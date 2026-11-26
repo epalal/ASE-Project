@@ -1,16 +1,27 @@
+import json
 import os
 import requests
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app, origins=["http://localhost:8080"], supports_credentials=True, expose_headers=["Content-Type"])
 
 AUTH_URL = os.environ.get("AUTH_URL", "https://localhost:5001").rstrip("/")
 MONSTER_URL = os.environ.get("MONSTER_URL", "https://localhost:5002").rstrip("/")
 ENCOUNTER_URL = os.environ.get("ENCOUNTER_URL", "https://encounter-service:5003").rstrip("/")
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:8080")
 REQUEST_TIMEOUT = 3
-
-CA_CERT_PATH = os.environ.get("CA_CERT_PATH", "/certs/ca.pem")
+'''
+@app.after_request
+def after_request(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Expose-Headers"] = "Content-Length,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Length,Authorization"
+    response.headers["Vary"] = "Origin"
+    return response
+'''
 
 def error(code, message, status=400):
     return jsonify(error=code, message=message), status
@@ -29,28 +40,22 @@ def downstream_failure(response):
 
 def forward(method, url, **kwargs):
     try:
-        res = requests.request(method, url, timeout=REQUEST_TIMEOUT, verify=CA_CERT_PATH, **kwargs)
+        res = requests.request(method, url, timeout=REQUEST_TIMEOUT, verify=False, **kwargs)
         if res.status_code >= 400:
             return None, downstream_failure(res)
-        
         if res.content:
             data = res.json()
-            if not isinstance(data, dict):
-                raise ValueError("Internal service returned non-object JSON")
+            if not isinstance(data, dict) and not isinstance(data, list):
+                data = json.loads(res.content)
+                if not isinstance(data, dict) and not isinstance(data, list):
+                    raise ValueError("Internal service returned non-object JSONs " + str(data) + ", " + str(type(data)))
             return data, None
         return {}, None
 
     except requests.Timeout:
         return None, error("upstream_timeout", "An internal service did not respond in time", 504)
-    except (requests.RequestException, ValueError):
-        return None, error("upstream_error", "An internal service request failed", 502)
-    
-@app.after_request
-def allow_the_frontend(response):
-    response.headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
-    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
-    return response
+    # except (requests.RequestException, ValueError):
+    #     return None, error("upstream_error", "An internal service request failed", 502)
 
 @app.post("/account")
 def proxy_account():
@@ -110,28 +115,6 @@ def proxy_get_challenges():
         headers["Authorization"] = request.headers["Authorization"]
 
     data, failure = forward("GET", f"{ENCOUNTER_URL}/challenges", headers=headers)
-    if failure is not None:
-        return failure
-    return jsonify(data), 200
-
-@app.get("/encounters")
-def proxy_get_history():
-    headers = {}
-    if "Authorization" in request.headers:
-        headers["Authorization"] = request.headers["Authorization"]
-
-    data, failure = forward("GET", f"{ENCOUNTER_URL}/encounters", headers=headers)
-    if failure is not None:
-        return failure
-    return jsonify(data), 200
-
-@app.get("/encounters/<encounter_id>")
-def proxy_get_encounter(encounter_id):
-    headers = {}
-    if "Authorization" in request.headers:
-        headers["Authorization"] = request.headers["Authorization"]
-
-    data, failure = forward("GET", f"{ENCOUNTER_URL}/encounters/{encounter_id}", headers=headers)
     if failure is not None:
         return failure
     return jsonify(data), 200
@@ -196,9 +179,38 @@ def proxy_get_collection():
         return failure
     return jsonify(data), 200
 
+@app.get("/internal/players/<string:player_id>/team")
+def proxy_get_player_team(player_id):
+    """Returns the player's team and owned species IDs (C9)."""
+    headers = {}
+    if "X-Internal-Secret" in request.headers:
+        headers["X-Internal-Secret"] = request.headers["X-Internal-Secret"]
+
+    data, failure = forward("GET", f"{MONSTER_URL}/internal/players/{player_id}/team", headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 200
+
+@app.post("/internal/rewards")
+def proxy_post_rewards():
+    """Applies a stats or capture reward from the Encounter service (C10)."""
+    try:
+        body = require_json_body()
+    except ValueError as exc:
+        return error("invalid_request", str(exc))
+
+    headers = {}
+    if "X-Internal-Secret" in request.headers:
+        headers["X-Internal-Secret"] = request.headers["X-Internal-Secret"]
+
+    data, failure = forward("POST", f"{MONSTER_URL}/internal/rewards", json=body, headers=headers)
+    if failure is not None:
+        return failure
+    return jsonify(data), 201
+
 @app.get("/health")
 def health():
     return jsonify(status="ok"), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, ssl_context=("/certs/server.pem", "/certs/server.key"))
+    app.run(host='0.0.0.0', port=5005) # , ssl_context=("/certs/server.pem", "/certs/server.key"))

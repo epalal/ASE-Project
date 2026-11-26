@@ -60,6 +60,9 @@ def account():
         if not isinstance(username, str) or not isinstance(password, str):
             return error("invalid_input", "Username and password must be strings")
 
+        if len(username) > 15 or len(password) > 15:
+            return error("invalid_input", "Username or password are too long")
+
         existing_user = session.query(User).filter_by(username=username).first()
 
         if existing_user:
@@ -92,11 +95,15 @@ def login():
     session = SessionLocal()
     try:
         body = require_json_body()
+        
         username = body.get("username")
         password = body.get("password")
 
         if not isinstance(username, str) or not isinstance(password, str):
-            return error("invalid_input", "Username and password must be strings", status=401)
+            return error("invalid_input", "Username and password must be strings")
+
+        if len(username) > 15 or len(password) > 15:
+            return error("invalid_input", "Username or password are too long")
         
         user = session.query(User).filter_by(username=username).first()
 
@@ -109,9 +116,10 @@ def login():
         
         payload = {
             "iss": "player-service",
+            "aud": "monster-tamers",
             "sub": str(user.id),  
             "username": username,
-            "exp": int(time.time()) + 5 * 60,  # token expires after 5 minutes
+            "exp": int(time.time()) + 5 * 60,
         }
 
         token = jwt.encode(payload, private_key, algorithm="RS256")

@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: Gateway API to connect user services
 servers:
-- url: http://localhost:5005
+- url: https://localhost:5005
 paths:
   /account:
     post:

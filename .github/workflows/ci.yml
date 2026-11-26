@@ -1,9 +1,10 @@
 # Runs the tests of every service at each push and pull request (Lab 7).
 # A failing test turns the run red. To add a service, add its name to the matrix:
 #   unit:       a folder with requirements-dev.txt and its pytest tests
-#   component:  compose.<name>.yaml, a compose service <name>-service, and the Bruno
-#               folders <name>, <name>-stub and <name>-security (hostile input, Lab 8)
-#               with the environment <name>-component
+#   component:  compose.<name>.yaml, a compose service <name>-service, the Bruno
+#               folder <name> with the environment <name>-component, and if the
+#               service has them, the folders <name>-stub and <name>-security
+#               (hostile input, Lab 8)
 #   security:   a folder with Python code and its requirements*.txt (Lab 9)
 #   images:     a folder with a Dockerfile (Lab 9)
 name: CI
@@ -76,9 +77,16 @@ jobs:
       - name: Trust our certificate authority
         run: docker compose -f compose.${{ matrix.service }}.yaml cp ${{ matrix.service }}-service:/certs/ca.pem tests/bruno/ca.pem
 
+      # The folder <name> is required; the stub and security folders run only if they exist.
       - name: Component tests
         working-directory: tests/bruno
-        run: bru run ${{ matrix.service }} ${{ matrix.service }}-stub ${{ matrix.service }}-security --env ${{ matrix.service }}-component --cacert ca.pem
+        run: |
+          folders="${{ matrix.service }}"
+          for optional in ${{ matrix.service }}-stub ${{ matrix.service }}-security; do
+            if [ -d "$optional" ]; then folders="$folders $optional"; fi
+          done
+          echo "Running the Bruno folders: $folders"
+          bru run $folders --env ${{ matrix.service }}-component --cacert ca.pem
 
       - name: Show the logs
         if: failure()

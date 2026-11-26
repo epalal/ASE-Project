@@ -106,30 +106,15 @@ def login():
         private_key, _ = get_keys()
         if not private_key:
             return error("server_error", "JWT signing keys not available", status=500)
-
-        header = {
-            "alg": "RS256",
-            "typ": "JWT"
-        }
+        
         payload = {
             "iss": "player-service",
-            "sub": user.id,
+            "sub": str(user.id),  
             "username": username,
-            "exp": int(time.time()) + 5 * 60  # token expires after 5 minutes
+            "exp": int(time.time()) + 5 * 60,  # token expires after 5 minutes
         }
 
-        header_encoded = jwt.utils.base64url_encode(json.dumps(header).encode('utf-8')).decode('utf-8')
-        payload_encoded = jwt.utils.base64url_encode(json.dumps(payload).encode('utf-8')).decode('utf-8')
-
-        message = f"{header_encoded}.{payload_encoded}"
-        signature = jwt.algorithms.RSAAlgorithm.sign(
-            jwt.algorithms.RSAAlgorithm.prepare_key(private_key),
-            message.encode('utf-8'),
-            "SHA256"
-        )
-        signature_encoded = jwt.utils.base64url_encode(signature).decode('utf-8')
-
-        token = f"{message}.{signature_encoded}"
+        token = jwt.encode(payload, private_key, algorithm="RS256")
 
         session.close()
         return jsonify(message="Successful login", username=username, id=user.id, token=token), 200

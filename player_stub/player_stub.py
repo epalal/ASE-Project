@@ -9,6 +9,8 @@ in as any player, including the Monster stub's special players.
   GET  /health
 
 Each token lasts 15 minutes and carries exp, sub, aud and iss, like a real one.
+With "expired": true in the body, the tokens have already expired (for the
+expired-token tests).
 """
 
 import datetime as dt
@@ -51,6 +53,9 @@ def create_stub(private_key=None):
         if player_ids is None:
             return jsonify(error="invalid_input", message='Send {"player_ids": ["<player ID>", ...]}.'), 400
         now = dt.datetime.now(dt.timezone.utc)
+        if request.get_json(silent=True).get("expired") is True:
+            # For the expired-token tests (Lab 10): issued and expired in the past.
+            now -= TOKEN_LIFETIME + dt.timedelta(minutes=1)
         return jsonify(
             tokens={
                 player_id: jwt.encode(

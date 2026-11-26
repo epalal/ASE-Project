@@ -8,10 +8,12 @@ of running them.
 |---|---|---|
 | `encounter` | The Encounter Service's answers: team, challenges, encounters, every error | `encounter-component` |
 | `encounter-stub` | What the Encounter Service asks the Monster Service, and what happens when it fails or refuses | `encounter-component` (component tests only) |
-| `encounter-security` | Hostile input (Lab 8): a body over 10 KB, control characters, `NaN`, huge numbers, text that is not JSON. Each one must be refused | `encounter-component` |
+| `encounter-security` | Hostile input (Lab 8): a body over 10 KB, control characters, `NaN`, huge numbers, text that is not JSON. Forged and expired login tokens (Lab 10): no signature (`alg: none`), signed with another key, expired. Each one must be refused | `encounter-component` |
 
 Each folder starts by getting login tokens from the Player Service stub, so a folder
-can run on its own and nothing secret is stored here.
+can run on its own and nothing secret is stored here. The two forged tokens in
+`encounter-security` are fake on purpose: one has no signature, and the other was
+signed with a key that was thrown away right after.
 
 ## Component tests of the Encounter Service
 
@@ -66,3 +68,6 @@ The Monster stub chooses its answer from the player ID in the token:
 | `stub-slow` | answers after 5 seconds, after the Encounter Service has given up (3 seconds) |
 
 Any other player owns the four starters, with the IDs `101`, `105`, `109` and `115`.
+
+The Player stub's `POST /__tokens` also accepts `"expired": true`: the tokens it gives
+back have already expired, for the expired-token test.

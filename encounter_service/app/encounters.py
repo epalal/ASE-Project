@@ -4,7 +4,7 @@ GET /encounters and GET /encounters/{id} are the player's history (US-23, US-24)
 
 import uuid
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import timedelta, timezone
 
 from flask import Blueprint, current_app, g, jsonify, request
 
@@ -20,6 +20,7 @@ encounters_bp = Blueprint("encounters", __name__)
 MAX_DB_INTEGER = 2**31 - 1  # the largest integer the database column stores
 INVALID_ACTION = 'Send {"action": "attack"}, {"action": "capture"} or {"action": "escape"}.'
 HISTORY_LIMIT = 50  # the newest encounters only, so the answer stays small after thousands of games
+ENCOUNTERS_PER_MINUTE = 10  # far more than a person plays; a script gets 429
 
 
 def _challenge_id_from(body):
@@ -81,6 +82,14 @@ def open_encounter():
     challenge = db.session.get(Challenge, challenge_id)
     if challenge is None:
         return error("challenge_not_found", "There is no challenge with this ID.", 404)
+    # Lab 11, THREAT_MODEL.md row 15: a script cannot flood the service (or the Monster Service).
+    # The count comes from the database, so it holds for every worker.
+    now = current_app.extensions["clock"]()
+    opened_last_minute = Encounter.query.filter(
+        Encounter.player_id == g.player_id, Encounter.created_at > now - timedelta(minutes=1)
+    ).count()
+    if opened_last_minute >= ENCOUNTERS_PER_MINUTE:
+        return error("too_many_requests", f"At most {ENCOUNTERS_PER_MINUTE} encounters a minute. Wait and try again.", 429)
     monster_client = current_app.extensions["monster_client"]
 
     # Rewards that could not be delivered earlier go first, so this fight uses the new stats.
@@ -103,7 +112,6 @@ def open_encounter():
         wild_owned=any(monster.species_id == wild.id for monster in owned.values()),
     )
 
-    now = datetime.now(timezone.utc)
     # One open encounter per player: an encounter still open counts as an escape.
     Encounter.query.filter_by(player_id=g.player_id, status="open").update(
         _closing("escape", rules.ESCAPED, at=now), synchronize_session=False
@@ -184,7 +192,7 @@ def choose_action(encounter_id):
     rewarded = outcome.result in rules.REWARDED_RESULTS
     claimed = Encounter.query.filter_by(id=encounter.id, status="open").update(
         {
-            **_closing(action, outcome, at=datetime.now(timezone.utc)),
+            **_closing(action, outcome, at=current_app.extensions["clock"]()),
             "reward_status": "pending" if rewarded else "none",
         },
         synchronize_session=False,

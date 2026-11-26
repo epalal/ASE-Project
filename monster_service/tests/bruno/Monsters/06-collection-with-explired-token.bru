@@ -1,0 +1,19 @@
+meta {
+  name: Collection With Expired Token
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{monsterUrl}}/collection
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{expiredToken}}
+}
+
+assert {
+  res.status: eq 401
+}

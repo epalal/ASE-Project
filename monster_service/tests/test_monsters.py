@@ -1,31 +1,34 @@
 import datetime
+import time
 import os
 import pytest
 import jwt
+import json
+import logging
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from app import create_app
 from app.models import db
+from app.audit import audit
 from datetime import datetime, timezone, timedelta
 
+
 # Generate a temporary RS256 key pair for testing JWTs
-_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-PRIVATE_PEM = _private_key.private_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PrivateFormat.PKCS8,
-    encryption_algorithm=serialization.NoEncryption()
-).decode("utf-8")
-PUBLIC_PEM = _private_key.public_key().public_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PublicFormat.SubjectPublicKeyInfo
-).decode("utf-8")
+_TEST_PRIV_KEY = rsa.generate_private_key(65537, 2048)
+_TEST_PUB_PEM = _TEST_PRIV_KEY.public_key().public_bytes(
+    serialization.Encoding.PEM,
+    serialization.PublicFormat.SubjectPublicKeyInfo,
+).decode()
+
+os.environ["JWT_PUBLIC_KEY"] = _TEST_PUB_PEM
+os.environ.pop("JWT_PUBLIC_KEY_PATH", None)
 
 INTERNAL_SECRET = "test-internal-secret-key"
 
 # Set environment variables for the test
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setenv("JWT_PUBLIC_KEY", PUBLIC_PEM)
+    monkeypatch.setenv("JWT_PUBLIC_KEY", _TEST_PUB_PEM)
     monkeypatch.setenv("INTERNAL_SERVICE_SECRET", INTERNAL_SECRET)
 
     app = create_app({
@@ -40,15 +43,16 @@ def client(monkeypatch):
         db.drop_all()
 
 # Generate a JWT token for a given player ID
-def make_token(player_id: str) -> str:
+def make_token(player_id: str, expired: bool = False) -> str:
     """Generate a valid JWT token for testing matching auth.py requirements."""
+    now = int(time.time())
     payload = {
-        "sub": player_id,
-        "aud": "monster-tamers",
         "iss": "player-service",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
-    # PRIVATE_PEM is the private key loaded for tests
-    return jwt.encode(payload, PRIVATE_PEM, algorithm="RS256")
+        "sub": player_id,
+        "username": player_id,
+        "exp": now - 60 if expired else now + 3600,
+    }
+    return jwt.encode(payload, _TEST_PRIV_KEY, algorithm="RS256")
 
 # TEST US-10: "browse all existing monsters available" GET /monsters 
 def test_get_catalog_valid(client):
@@ -184,3 +188,124 @@ def test_get_internal_player_monsters(client):
     data = response.get_json()
     assert data["player_id"] == "test_player_01"
     assert "collection" in data
+
+@pytest.fixture
+def rsa_keys(monkeypatch):
+    priv = rsa.generate_private_key(65537, 2048)
+    pub_pem = priv.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    monkeypatch.setenv("JWT_PUBLIC_KEY", pub_pem)
+    monkeypatch.delenv("JWT_PUBLIC_KEY_PATH", raising=False)
+    return priv
+
+def test_collection_valid_token(client, rsa_keys):
+    token = jwt.encode(
+        {"iss": "player-service", "sub": "pytest_player", "exp": int(time.time()) + 300},
+        rsa_keys,
+        algorithm="RS256",
+    )
+    res = client.get("/collection", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.get_json()["player_id"] == "pytest_player"
+
+def test_collection_missing_token(client, rsa_keys):
+    res = client.get("/collection")
+    assert res.status_code == 401
+
+def test_collection_expired_token(client, rsa_keys):
+    token = jwt.encode(
+        {"iss": "player-service", "sub": "pytest_player", "exp": int(time.time()) - 60},
+        rsa_keys,
+        algorithm="RS256",
+    )
+    res = client.get("/collection", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 401
+
+def test_collection_forged_alg_none(client, rsa_keys):
+    forged = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF5ZXItc2VydmljZSIsInN1YiI6InB5dGVzdF9wbGF5ZXIiLCJleHAiOjk5OTk5OTk5OTl9."
+    res = client.get("/collection", headers={"Authorization": f"Bearer {forged}"})
+    assert res.status_code == 401
+
+def _audit_lines(caplog):
+    return [
+        json.loads(r.getMessage())
+        for r in caplog.records
+        if r.name == "audit"
+    ]
+
+
+def test_audit_log_records_denied_and_success(client, caplog):
+    """Lab 11: Verify that both denied (401) and authorized (200) requests are audit-logged."""
+    caplog.set_level(logging.INFO, logger="audit")
+
+    # 1. Denied request (missing token -> 401)
+    res_denied = client.get("/collection")
+    assert res_denied.status_code == 401
+
+    # 2. Authorized request (valid JWT -> 200)
+    token = make_token("audit_player_01")
+    res_ok = client.get("/collection", headers={"Authorization": f"Bearer {token}"})
+    assert res_ok.status_code == 200
+
+    events = _audit_lines(caplog)
+    assert len(events) >= 2
+    assert events[0]["outcome"] == "denied"
+    assert events[0]["path"] == "/collection"
+    assert events[1]["outcome"] == "success"
+    assert events[1]["user"] == "audit_player_01"
+
+
+def test_audit_log_never_leaks_tokens_or_secrets(client, caplog):
+    """Lab 11: Verify that Bearer JWTs and X-Internal-Secret never appear in audit logs."""
+    caplog.set_level(logging.INFO, logger="audit")
+    token = make_token("secret_check_player")
+
+    client.get("/collection", headers={"Authorization": f"Bearer {token}"})
+    client.post(
+        "/internal/rewards",
+        json={"player_id": "p1", "captured_species_id": 1, "encounter_id": "enc_audit_1"},
+        headers={"X-Internal-Secret": INTERNAL_SECRET},
+    )
+
+    assert token not in caplog.text
+    assert INTERNAL_SECRET not in caplog.text
+
+
+def test_audit_log_no_newline_injection(caplog):
+    """Lab 11: A newline in user input cannot forge a second audit log line."""
+    caplog.set_level(logging.INFO, logger="audit")
+    audit("request", "success", user='ada\n{"user":"root","outcome":"success"}')
+
+    records = [r for r in caplog.records if r.name == "audit"]
+    assert len(records) == 1
+    assert "\n" not in records[0].getMessage()
+
+def test_audit_log_on_collection_and_no_secret_leak(client, caplog):
+    """Lab 11: Verify audit log records outcomes, never leaks JWT, and prevents newline injection."""
+    caplog.set_level(logging.INFO, logger="audit")
+
+    # 1. Request without token -> 401 (outcome: denied)
+    res_denied = client.get("/collection")
+    assert res_denied.status_code == 401
+
+    # 2. Request with valid token -> 200 (outcome: success)
+    token = make_token("player_audit")
+    res_ok = client.get("/collection", headers={"Authorization": f"Bearer {token}"})
+    assert res_ok.status_code == 200
+
+    # 3. Attempt to inject log with newline (\n)
+    audit("request", "success", user='ada\n{"user":"root"}')
+
+    records = [r for r in caplog.records if r.name == "audit"]
+    assert len(records) == 3
+
+    first = json.loads(records[0].getMessage())
+    second = json.loads(records[1].getMessage())
+
+    assert first["outcome"] == "denied"
+    assert second["outcome"] == "success"
+    assert second["user"] == "player_audit"
+    assert token not in caplog.text
+    assert "\n" not in records[2].getMessage()

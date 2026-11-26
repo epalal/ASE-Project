@@ -38,6 +38,26 @@ def test_a_token_from_the_player_stub_is_accepted_by_the_encounter_service(tls, 
     assert response.status_code == 200
 
 
+def test_the_player_stub_can_give_an_expired_token_that_the_encounter_service_refuses(
+    tls, player_stub, monster_service
+):
+    # Lab 10: Bruno cannot sign tokens, so the expired-token test asks the stub for one.
+    tokens = player_stub.post("/__tokens", json={"player_ids": ["tamer-a"], "expired": True}).get_json()["tokens"]
+    encounter_service = create_app(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "JWT_PUBLIC_KEY": (tls / "encounter-service" / "jwt_public.pem").read_text(),
+            "DATA_KEY": Fernet.generate_key(),
+        },
+        monster_client=monster_service,
+    ).test_client()
+
+    response = encounter_service.get("/team", headers={"Authorization": f"Bearer {tokens['tamer-a']}"})
+
+    assert response.status_code == 401
+
+
 def test_each_player_gets_a_token_in_their_own_name(tls, player_stub):
     tokens = player_stub.post("/__tokens", json={"player_ids": ["tamer-a", "tamer-b"]}).get_json()["tokens"]
     public_key = (tls / "encounter-service" / "jwt_public.pem").read_text()

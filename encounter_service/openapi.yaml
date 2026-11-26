@@ -289,6 +289,19 @@ paths:
               example:
                 error: no_team
                 message: Save a valid team of three monsters you own first.
+        '429':
+          description: '`too_many_requests`: the player already opened 10 encounters in the last minute (THREAT_MODEL.md, row 15); wait and try again'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      error:
+                        const: too_many_requests
+              example:
+                error: too_many_requests
+                message: At most 10 encounters a minute. Wait and try again.
         '502':
           $ref: '#/components/responses/MonsterServiceUnavailable'
         '504':
@@ -462,6 +475,12 @@ components:
                     const: request_entity_too_large
     Unauthorized:
       description: '`unauthorized`: no token, or a token that is forged, expired, for another audience or issuer, or missing a claim'
+      headers:
+        WWW-Authenticate:
+          description: 'RFC 6750: `Bearer` when no token was sent, `Bearer error="invalid_token"` when the token was refused.'
+          schema:
+            type: string
+            enum: ['Bearer', 'Bearer error="invalid_token"']
       content:
         application/json:
           schema:

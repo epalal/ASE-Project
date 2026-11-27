@@ -50,7 +50,6 @@ services:
   # The Player Service stub signs login tokens with the Player Service's key, so
   # the tests can log in as any player. The Encounter Service never calls it.
   player-service:
-    player-service:
     build: ./player_service
     <<: *certificate-group
     environment:

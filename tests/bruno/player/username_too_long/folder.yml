@@ -1,0 +1,7 @@
+info:
+  name: username_too_long
+  type: folder
+  seq: 2
+
+request:
+  auth: inherit

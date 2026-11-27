@@ -1,0 +1,7 @@
+info:
+  name: registration_only_user
+  type: folder
+  seq: 6
+
+request:
+  auth: inherit

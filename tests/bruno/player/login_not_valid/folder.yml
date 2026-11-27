@@ -1,0 +1,7 @@
+info:
+  name: login_not_valid
+  type: folder
+  seq: 7
+
+request:
+  auth: inherit

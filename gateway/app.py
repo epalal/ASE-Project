@@ -264,7 +264,16 @@ def create_app(test_config=None):
 
     @app.after_request
     def add_cors_and_audit(response):
-        response.headers["Access-Control-Allow-Origin"] = current_app.config["FRONTEND_ORIGIN"]
+        allowed_origins = {
+            current_app.config["FRONTEND_ORIGIN"],
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+        }
+        req_origin = request.headers.get("Origin")
+        response.headers["Access-Control-Allow-Origin"] = (
+            req_origin if req_origin in allowed_origins else current_app.config["FRONTEND_ORIGIN"]
+        )
+        response.headers["Vary"] = "Origin"
         response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
 

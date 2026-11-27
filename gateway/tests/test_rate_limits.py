@@ -87,3 +87,16 @@ def test_gateway_proxies_monster_assets(monkeypatch):
     assert res.status_code == 200
     assert res.data == b"fake-jpeg-bytes"
     assert res.mimetype == "image/jpeg"
+
+
+def test_gateway_allows_localhost_and_loopback_frontend_origins():
+    app = create_app({"TESTING": True, "RATELIMIT_STORAGE_URI": "memory://"})
+    client = app.test_client()
+
+    for origin in ("http://localhost:8080", "http://127.0.0.1:8080"):
+        res = client.get("/health", headers={"Origin": origin})
+        assert res.status_code == 200
+        assert res.headers["Access-Control-Allow-Origin"] == origin
+
+    other = client.get("/health", headers={"Origin": "https://evil.example"})
+    assert other.headers["Access-Control-Allow-Origin"] == "http://localhost:8080"

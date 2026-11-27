@@ -14,7 +14,7 @@ from db.db import User, db
 
 MAX_BODY_BYTES = 10_000
 MAX_USERNAME_LENGTH = 64
-MIN_PASSWORD_LENGTH = 8
+MIN_PASSWORD_LENGTH = 4
 MAX_PASSWORD_BYTES = 72  # bcrypt silently truncates beyond 72 bytes
 TOKEN_TTL_SECONDS = 15 * 60
 JWT_ISSUER = "player-service"

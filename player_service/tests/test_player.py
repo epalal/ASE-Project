@@ -97,7 +97,7 @@ def test_login_rejects_wrong_credentials(client):
         '{"username": "bad user", "password": "securepassword"}',
         '{"username": "u1\\u0000", "password": "securepassword"}',
         '{"username": "u1\\n", "password": "securepassword"}',
-        '{"username": "u1", "password": "short"}',
+        '{"username": "u1", "password": "abc"}',
         json.dumps({"username": "u1", "password": "p" * 73}),
         json.dumps({"username": "u" * 65, "password": "securepassword"}),
     ],

@@ -15,12 +15,14 @@ headers {
 }
 
 script:pre-request {
-  bru.setVar("dynamicEncounterId", "enc_" + Date.now());
+  const unique = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+  bru.setVar("dynamicEncounterId", "enc_" + unique);
+  bru.setVar("dynamicPlayerId", "player_" + unique);
 }
 
 body:json {
   {
-    "player_id": "test_player_01",
+    "player_id": "{{dynamicPlayerId}}",
     "captured_species_id": 11,
     "encounter_id": "{{dynamicEncounterId}}"
   }

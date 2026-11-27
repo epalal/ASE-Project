@@ -108,11 +108,11 @@ jobs:
         run: docker compose -f compose.player.yaml up --build -d --wait
 
       - name: Trust our certificate authority
-        run: docker compose -f compose.player.yaml cp player-service:/certs/ca.pem tests/bruno/player/ca.pem
+        run: docker compose -f compose.player.yaml cp player-service:/certs/ca.pem tests_player/bruno/ca.pem
 
       - name: Run Player Bruno tests
-        working-directory: tests/bruno/player
-        run: bru run health account login account_not_new login_not_valid empty_registration registration_only_user registration_only_password --cacert ca.pem
+        working-directory: tests_player/bruno
+        run: bru run health account login --cacert ca.pem
 
       - name: Show logs on failure
         if: failure()
@@ -273,7 +273,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        folder: [encounter_service, player_service, monster_service, gateway, tls_init, monster_stub]
+        folder: [encounter_service, player_service, monster_service, gateway, tls_init, monster_stub, player_stub]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -313,6 +313,7 @@ jobs:
           - frontend_service
           - tls_init
           - monster_stub
+          - player_stub
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7

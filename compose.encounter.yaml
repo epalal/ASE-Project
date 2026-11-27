@@ -47,5 +47,24 @@ services:
       timeout: 3s
       retries: 20
 
+  # The Player Service stub signs login tokens with the Player Service's key, so
+  # the tests can log in as any player. The Encounter Service never calls it.
+  player-service:
+    build: ./player_service
+    <<: *certificate-group
+    volumes:
+      - player-service-certs:/certs:ro
+    ports:
+      - "127.0.0.1:5001:5001"  # the tests ask POST /__tokens
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://localhost:5001/health', context=ssl.create_default_context(cafile='/certs/ca.pem'), timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+
 volumes:
   encounter-db-data:

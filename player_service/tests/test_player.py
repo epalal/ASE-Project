@@ -139,3 +139,20 @@ def test_audit_log_never_leaks_passwords_or_tokens(client, caplog):
     assert len(records) == 2
     assert records[0]["outcome"] == "success"
     assert records[1]["outcome"] == "success"
+
+
+def test_login_missing_keys_returns_500(tmp_path):
+    app = create_app(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "JWT_PRIVATE_KEY": None,
+            "JWT_PRIVATE_KEY_PATH": str(tmp_path / "missing_private.pem"),
+        }
+    )
+    with app.test_client() as test_client:
+        test_client.post("/account", json={"username": "nokey_user", "password": "securepassword"})
+        res = test_client.post("/login", json={"username": "nokey_user", "password": "securepassword"})
+
+    assert res.status_code == 500
+    assert res.get_json() == {"error": "server_error", "message": "JWT signing keys not available"}

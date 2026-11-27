@@ -200,6 +200,6 @@ def make_certs(out, services=SERVICES):
 
 if __name__ == "__main__":
     make_certs(
-        os.environ.get("TLS_OUT", "/tls"),
+        os.environ.get("TLS_OUT", "tls"),
         services=os.environ.get("TLS_SERVICES", ",".join(SERVICES)).split(","),
     )

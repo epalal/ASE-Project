@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>Monster Tamer</title>
+		<title>Monster Tamer (Copy)</title>
 		<style>
 html, body, #canvas {
 	margin: 0;
@@ -38,7 +38,7 @@ body {
 }
 
 #status {
-	background-color: #242424;
+	background-color: #121219;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
@@ -89,66 +89,6 @@ body {
 	text-align: center;
 	z-index: 1;
 }
-
-#cert-banner {
-	display: none;
-	position: fixed;
-	inset: 0;
-	z-index: 9999;
-	background: rgba(15, 18, 26, 0.92);
-	color: #f3f4f6;
-	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
-	align-items: center;
-	justify-content: center;
-	padding: 1.5rem;
-}
-
-#cert-banner.visible {
-	display: flex;
-}
-
-#cert-banner-card {
-	max-width: 520px;
-	background: #1f2937;
-	border: 1px solid #374151;
-	border-radius: 0.75rem;
-	padding: 1.5rem;
-	text-align: center;
-	line-height: 1.5;
-}
-
-#cert-banner-card h2 {
-	margin-top: 0;
-}
-
-#cert-banner-actions {
-	display: flex;
-	gap: 0.75rem;
-	justify-content: center;
-	flex-wrap: wrap;
-	margin-top: 1rem;
-}
-
-.cert-btn {
-	display: inline-block;
-	padding: 0.65rem 1.1rem;
-	border-radius: 0.5rem;
-	border: none;
-	cursor: pointer;
-	font-size: 0.95rem;
-	font-weight: 600;
-	text-decoration: none;
-}
-
-.cert-btn-primary {
-	background: #2563eb;
-	color: #ffffff;
-}
-
-.cert-btn-secondary {
-	background: #374151;
-	color: #f9fafb;
-}
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="MonsterTamer.icon.png" />
 <link rel="apple-touch-icon" href="MonsterTamer.apple-touch-icon.png"/>
@@ -169,53 +109,9 @@ body {
 			<div id="status-notice"></div>
 		</div>
 
-		<div id="cert-banner" role="dialog" aria-modal="true">
-			<div id="cert-banner-card">
-				<h2>API Gateway HTTPS Certificate</h2>
-				<p>
-					The game communicates with the API Gateway at <code>https://127.0.0.1:5005</code>,
-					which uses a local development certificate.
-				</p>
-				<p>
-					Open the Gateway health page in a new tab, accept the certificate warning
-					(Advanced &rarr; Proceed), then click <strong>Retry</strong>.
-				</p>
-				<div id="cert-banner-actions">
-					<a class="cert-btn cert-btn-primary" href="https://127.0.0.1:5005/health" target="_blank" rel="noopener">
-						Open https://127.0.0.1:5005/health
-					</a>
-					<button id="cert-retry-btn" type="button" class="cert-btn cert-btn-secondary">
-						Retry
-					</button>
-				</div>
-			</div>
-		</div>
-
 		<script src="MonsterTamer.js"></script>
 		<script>
-(function () {
-	const banner = document.getElementById('cert-banner');
-	const retryBtn = document.getElementById('cert-retry-btn');
-
-	async function checkGatewayTls() {
-		try {
-			const res = await fetch('https://127.0.0.1:5005/health', { mode: 'cors' });
-			if (res.ok) {
-				banner.classList.remove('visible');
-				return;
-			}
-		} catch (_err) {
-			// Browser rejected the self-signed local CA certificate or gateway is unreachable.
-		}
-		banner.classList.add('visible');
-	}
-
-	retryBtn.addEventListener('click', checkGatewayTls);
-	checkGatewayTls();
-}());
-		</script>
-		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"MonsterTamer","experimentalVK":false,"fileSizes":{"MonsterTamer.pck":312896,"MonsterTamer.wasm":37902138},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"MonsterTamer","experimentalVK":false,"fileSizes":{"MonsterTamer.pck":393856,"MonsterTamer.wasm":37902138},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 

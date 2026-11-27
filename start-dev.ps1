@@ -118,6 +118,25 @@ if ($secretsUpdated) {
     Invoke-DockerQuiet @("compose", "down", "-v")
 }
 
+Write-Host "`nGenerating TLS certificates..."
+$ErrorActionPreference = "Continue"
+python (Join-Path $PSScriptRoot "tls_init/make_certs.py")
+$certExit = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
+if ($certExit -ne 0) {
+    throw "TLS certificate generation failed."
+}
+
+$gatewayCerts = Join-Path $PSScriptRoot "tls/gateway"
+$frontendCerts = Join-Path $PSScriptRoot "frontend_service/certs"
+
+if (-not (Test-Path $gatewayCerts)) {
+    throw "Gateway certificate directory was not created: $gatewayCerts"
+}
+
+New-Item -ItemType Directory -Path $frontendCerts -Force | Out-Null
+Copy-Item -Path (Join-Path $gatewayCerts "*") -Destination $frontendCerts -Recurse -Force
+
 Write-Host "`nStarting backend microservices with Docker Compose..."
 $ErrorActionPreference = "Continue"
 docker compose up --build -d --wait
@@ -145,7 +164,7 @@ if ($runExit -ne 0) {
 }
 
 Write-Host "`nAll services are up and running:" -ForegroundColor Green
-Write-Host "  - Frontend:    http://localhost:8080"
+Write-Host "  - Frontend:    https://localhost:8080"
 Write-Host "  - API Gateway: https://localhost:5005"
 Write-Host "`nTip: if your browser warns about the local self-signed CA certificate,"
 Write-Host "visit https://127.0.0.1:5005/health once and accept it before playing."

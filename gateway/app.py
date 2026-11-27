@@ -247,7 +247,7 @@ def create_app(test_config=None):
         MONSTER_URL=os.environ.get("MONSTER_URL", "https://monster-service:5002").rstrip("/"),
         ENCOUNTER_URL=os.environ.get("ENCOUNTER_URL", "https://encounter-service:5003").rstrip("/"),
         CA_CERT_PATH=os.environ.get("CA_CERT_PATH", "/certs/ca.pem"),
-        FRONTEND_ORIGIN=os.environ.get("FRONTEND_ORIGIN", "http://localhost:8080"),
+        FRONTEND_ORIGIN=os.environ.get("FRONTEND_ORIGIN", "https://localhost:8080"),
         REQUEST_TIMEOUT=float(os.environ.get("REQUEST_TIMEOUT", REQUEST_TIMEOUT)),
         MAX_CONTENT_LENGTH=MAX_BODY_BYTES,
         RATELIMIT_STORAGE_URI=os.environ.get(
@@ -266,8 +266,8 @@ def create_app(test_config=None):
     def add_cors_and_audit(response):
         allowed_origins = {
             current_app.config["FRONTEND_ORIGIN"],
-            "http://localhost:8080",
-            "http://127.0.0.1:8080",
+            "https://localhost:8080",
+            "https://127.0.0.1:8080",
         }
         req_origin = request.headers.get("Origin")
         response.headers["Access-Control-Allow-Origin"] = (

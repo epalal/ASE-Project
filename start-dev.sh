@@ -92,6 +92,19 @@ if [[ "$secrets_updated" -eq 1 ]]; then
 fi
 
 echo ""
+echo "Generating TLS certificates..."
+python3 tls_init/make_certs.py
+
+if [[ ! -d tls/gateway ]]; then
+  echo "Gateway certificate directory was not created: tls/gateway" >&2
+  exit 1
+fi
+
+mkdir -p frontend_service/certs
+cp -R tls/gateway/. frontend_service/certs/
+
+
+echo ""
 echo "Starting backend microservices with Docker Compose..."
 docker compose up --build -d --wait
 

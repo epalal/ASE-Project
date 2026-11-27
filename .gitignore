@@ -10,7 +10,7 @@ users_data.json
 .env
 *.pem
 *.key
-certs/
+./certs/
 
 # Local data, Mac and editor files
 data/

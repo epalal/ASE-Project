@@ -1,0 +1,7 @@
+info:
+  name: account_not_new
+  type: folder
+  seq: 4
+
+request:
+  auth: inherit

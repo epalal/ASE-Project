@@ -1,0 +1,7 @@
+info:
+  name: login_too_long
+  type: folder
+  seq: 11
+
+request:
+  auth: inherit

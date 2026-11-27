@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: "{{playerStubUrl}}/account"
+  url: "{{playerStubUrl}}/__tokens"
   body:
     type: json
     data: |-

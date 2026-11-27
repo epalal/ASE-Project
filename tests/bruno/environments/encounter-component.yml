@@ -4,5 +4,5 @@ variables:
     value: https://localhost:5003
   - name: monsterStubUrl
     value: https://localhost:5004
-  - name: playerUrl
+  - name: playerStubUrl
     value: https://localhost:5001

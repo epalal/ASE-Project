@@ -273,7 +273,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        folder: [encounter_service, player_service, monster_service, gateway, tls_init, monster_stub, player_stub]
+        folder: [encounter_service, player_service, monster_service, gateway, tls_init, monster_stub]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -313,7 +313,6 @@ jobs:
           - frontend_service
           - tls_init
           - monster_stub
-          - player_stub
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7

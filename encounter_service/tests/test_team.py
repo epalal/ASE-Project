@@ -217,3 +217,28 @@ def test_a_team_request_that_is_not_json_is_refused(client, token_for):
 
     assert refused.status_code == 400
     assert refused.get_json()["error"] == "invalid_input"
+
+
+def test_godot_float_species_ids_resolve_to_owned_monster_ids(client, token_for, monster_service):
+    monster_service.give("player-1", "1", species_id=1)
+    monster_service.give("player-1", "2", species_id=5)
+    monster_service.give("player-1", "3", species_id=9)
+
+    saved = client.put("/team", json={"monster_ids": ["1.0", "5.0", "9.0"]}, headers=token_for("player-1"))
+
+    assert saved.status_code == 200
+    assert saved.get_json() == {"monster_ids": ["1", "2", "3"]}
+
+
+def test_unowned_or_duplicate_godot_float_species_ids_are_refused(client, token_for, monster_service):
+    monster_service.give("player-1", "1", species_id=1)
+    monster_service.give("player-1", "2", species_id=5)
+    monster_service.give("player-1", "3", species_id=9)
+
+    unowned = client.put("/team", json={"monster_ids": ["1.0", "5.0", "12.0"]}, headers=token_for("player-1"))
+    assert unowned.status_code == 400
+    assert unowned.get_json()["error"] == "not_owned"
+
+    duplicate = client.put("/team", json={"monster_ids": ["1.0", "1.0", "9.0"]}, headers=token_for("player-1"))
+    assert duplicate.status_code == 400
+    assert duplicate.get_json()["error"] == "duplicate_monster"

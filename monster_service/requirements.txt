@@ -5,4 +5,3 @@ psycopg2-binary==2.9.11
 PyJWT==2.15.0
 cryptography==50.0.0
 gunicorn==23.0.0
-pytest==9.0.3

@@ -130,35 +130,34 @@ There is no session or token table, because a JWT carries its own expiry. We sto
 
 ### monster-db (Monster Service)
 
-`species`: the catalogue, 16 rows loaded once
+`monster_catalog`: the catalogue, 16 rows loaded once
 
 | Column | Rule | Why |
 |---|---|---|
-| `id` | primary key | Identifies the monster |
+| `id` | primary key | Identifies the monster species |
 | `name` | unique, not null | |
-| `type` | one of `fire`, `water`, `grass`, `dark` | Typos and unknown types are rejected; the names match the monster cards |
-| `base_atk`, `base_hp` | integer, greater than 0 | Starting stats from the roster slide; both enter the monster's power (see Encounter rules) |
+| `element` | `Fire`, `Water`, `Dark`, or `Grass` | Matches the four elemental types shown on the monster cards |
+| `power`, `hp` | integer, not null | Starting ATK (`power`) and HP from the roster slide; both enter the monster's combat power |
 | `image_url` | not null | Every monster must have an image (requirements §4) |
 
-`owned_monster`: a player's monsters
+`player_monsters`: a player's owned monsters
 
 | Column | Rule | Why |
 |---|---|---|
-| `id` | UUID, primary key | The team points to this ID |
-| `player_id` | UUID, not null | Owner, from the token |
-| `species_id` | references `species` | Which monster this is |
-| `atk`, `hp` | integer, greater than 0 | Current stats: they start at the base values and grow by 1 per attack win, up to the base value + 3 |
-| `source` | `starter` or `capture` | Where it came from (US-06 or US-12) |
-| `source_encounter_id` | UUID, unique, nullable | The encounter that captured it; the same encounter cannot capture twice |
-| `acquired_at` | timestamp | Record keeping |
-| | unique (`player_id`, `species_id`) | No duplicates: a player owns at most one of each species |
+| `id` | auto-incrementing integer, primary key (exposed as `ownership_id`) | The team points to this ID |
+| `player_id` | text (up to 64 characters), indexed, not null | Keyed HMAC lookup index (`h1_...`) of the player ID from the JWT, enabling queries without storing plaintext IDs |
+| `secret_notes` | Fernet-encrypted text, not null | Encrypted `player_id` at rest using the Monster Service `data.key` |
+| `monster_id` | integer, references `monster_catalog.id`, not null | Which species this owned monster belongs to |
+| `atk`, `hp` | integer, not null | Current stats: they start at `power`/`hp` and grow via attack wins up to base + 3 |
+| `acquired_at` | UTC timestamp | Record keeping |
+| | unique (`player_id`, `monster_id`) | No duplicates: a player owns at most one of each species |
 
-`applied_reward`: the encounters already rewarded
+`applied_rewards`: the encounters already rewarded
 
 | Column | Rule | Why |
 |---|---|---|
-| `encounter_id` | UUID, primary key | A second reward for the same encounter is rejected (rule 4), for stats rewards and captures alike |
-| `applied_at` | timestamp | Record keeping |
+| `encounter_id` | text (up to 64 characters), primary key | A second reward for the same encounter is rejected (rule 4), for stats rewards and captures alike |
+| `applied_at` | UTC timestamp | Record keeping |
 
 The details of each reward (the stats added, the monster captured) are already in the Encounter Service's `encounter` table, so this table only keeps the encounter ID. It still has to exist, because the Monster Service cannot read encounter-db and is the only one that knows whether it already applied a reward. If the Monster Service raises the stats but its answer is lost on the way back, the Encounter Service sees a timeout and sends the reward again; this table is what stops the stats from going up twice. Tancredi suggested dropping the reward details here.
 

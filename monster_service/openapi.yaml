@@ -121,11 +121,14 @@ components:
 
     ErrorResponse:
       type: object
-      required: [error]
+      required: [error, message]
       properties:
         error:
           type: string
-          example: Error message describing the issue
+          example: invalid_input
+        message:
+          type: string
+          example: Request body must be a valid JSON object
 
 paths:
   /health:

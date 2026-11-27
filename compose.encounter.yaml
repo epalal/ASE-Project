@@ -50,12 +50,15 @@ services:
   # The Player Service stub signs login tokens with the Player Service's key, so
   # the tests can log in as any player. The Encounter Service never calls it.
   player-service:
+    player-service:
     build: ./player_service
     <<: *certificate-group
+    environment:
+      DATABASE_URL: "sqlite:///:memory:"
     volumes:
       - player-service-certs:/certs:ro
     ports:
-      - "127.0.0.1:5001:5001"  # the tests ask POST /__tokens
+      - "127.0.0.1:5001:5001"  
     depends_on:
       tls-init:
         condition: service_completed_successfully
